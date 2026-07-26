@@ -11,10 +11,18 @@ enum class TransitionStyle {
     VERTICAL_SCROLL
 }
 
+enum class ReadingMode {
+    KINDLE_REFLOW,
+    ORIGINAL_LAYOUT
+}
+
 data class ReaderSettings(
     val theme: ReaderTheme = ReaderTheme.SEPIA,
     val transitionStyle: TransitionStyle = TransitionStyle.HORIZONTAL_FLIP,
     val brightness: Float = -1f, // -1f means system brightness, 0f..1f is custom brightness
-    val cropMargins: Boolean = false,
-    val zoomScale: Float = 1.0f
+    val cropMargins: Boolean = true,
+    val zoomScale: Float = 1.0f,
+    val readingMode: ReadingMode = ReadingMode.KINDLE_REFLOW,
+    val fontSize: Int = 18,
+    val lineHeight: Float = 1.5f
 )

@@ -14,10 +14,13 @@ import java.io.FileOutputStream
 class PdfRendererHelper(private val filePath: String) {
     private var fileDescriptor: ParcelFileDescriptor? = null
     private var pdfRenderer: PdfRenderer? = null
+    private var pdDocument: com.tom_roush.pdfbox.pdmodel.PDDocument? = null
     private var totalPagesCount: Int = 0
 
     // Memory cache for up to 12 rendered page bitmaps for ultra-smooth Kindle page turning
     private val pageCache = LruCache<Int, Bitmap>(12)
+    // Cache for extracted text strings for instant reflow reading
+    private val textCache = LruCache<Int, String>(50)
 
     suspend fun open(): Int = withContext(Dispatchers.IO) {
         try {
@@ -69,12 +72,42 @@ class PdfRendererHelper(private val filePath: String) {
         }
     }
 
+    suspend fun extractPageText(pageIndex: Int): String? = withContext(Dispatchers.IO) {
+        if (pageIndex < 0 || pageIndex >= totalPagesCount) return@withContext null
+        val cached = textCache.get(pageIndex)
+        if (cached != null) return@withContext cached
+
+        try {
+            synchronized(this@PdfRendererHelper) {
+                if (pdDocument == null) {
+                    val file = File(filePath)
+                    if (file.exists()) {
+                        pdDocument = com.tom_roush.pdfbox.pdmodel.PDDocument.load(file)
+                    }
+                }
+                val doc = pdDocument ?: return@withContext null
+                val stripper = com.tom_roush.pdfbox.text.PDFTextStripper()
+                stripper.startPage = pageIndex + 1
+                stripper.endPage = pageIndex + 1
+                val text = stripper.getText(doc)?.trim() ?: ""
+                textCache.put(pageIndex, text)
+                text
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     suspend fun close() = withContext(Dispatchers.IO) {
         try {
             synchronized(this@PdfRendererHelper) {
                 pageCache.evictAll()
+                textCache.evictAll()
                 pdfRenderer?.close()
                 pdfRenderer = null
+                pdDocument?.close()
+                pdDocument = null
                 fileDescriptor?.close()
                 fileDescriptor = null
             }

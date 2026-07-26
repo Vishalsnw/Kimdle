@@ -61,6 +61,16 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.geometry.Offset
+import com.example.data.model.ReadingMode
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -243,12 +253,12 @@ fun ReaderScreen(
                             }
                         }
                 ) { pageIndex ->
-                    PdfPageItem(
+                    KindlePageContent(
                         pageIndex = pageIndex,
+                        settings = settings,
                         widthPx = screenWidthPx,
                         heightPx = screenHeightPx,
                         colorFilter = pdfColorFilter,
-                        cropMargins = settings.cropMargins,
                         viewModel = viewModel
                     )
                 }
@@ -272,12 +282,12 @@ fun ReaderScreen(
                                 .fillMaxWidth()
                                 .height(configuration.screenHeightDp.dp)
                         ) {
-                            PdfPageItem(
+                            KindlePageContent(
                                 pageIndex = pageIndex,
+                                settings = settings,
                                 widthPx = screenWidthPx,
                                 heightPx = screenHeightPx,
                                 colorFilter = pdfColorFilter,
-                                cropMargins = settings.cropMargins,
                                 viewModel = viewModel
                             )
                         }
@@ -318,6 +328,17 @@ fun ReaderScreen(
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                         )
                         Row {
+                            // Kindle Smart Reflow Toggle Button
+                            IconButton(onClick = {
+                                val newMode = if (settings.readingMode == ReadingMode.KINDLE_REFLOW) ReadingMode.ORIGINAL_LAYOUT else ReadingMode.KINDLE_REFLOW
+                                viewModel.updateReadingMode(newMode)
+                            }) {
+                                Icon(
+                                    imageVector = if (settings.readingMode == ReadingMode.KINDLE_REFLOW) Icons.Default.TextFields else Icons.Default.Image,
+                                    contentDescription = "Toggle Kindle Reflow Mode",
+                                    tint = if (settings.readingMode == ReadingMode.KINDLE_REFLOW) AmberPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                             // Bookmark Button
                             IconButton(onClick = {
                                 if (isBookmarked) {
@@ -571,6 +592,61 @@ fun ReaderScreen(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
+                // Reading Mode Section (Kindle Text Reflow vs Original PDF)
+                Text(text = "Reading Mode (Kindle Smart Fit)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    TransitionStyleCard(
+                        title = "📖 Kindle Reflow",
+                        subtitle = "Auto-wraps to screen width",
+                        selected = settings.readingMode == ReadingMode.KINDLE_REFLOW,
+                        onClick = { viewModel.updateReadingMode(ReadingMode.KINDLE_REFLOW) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TransitionStyleCard(
+                        title = "🖼️ Original Layout",
+                        subtitle = "Exact document image",
+                        selected = settings.readingMode == ReadingMode.ORIGINAL_LAYOUT,
+                        onClick = { viewModel.updateReadingMode(ReadingMode.ORIGINAL_LAYOUT) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                if (settings.readingMode == ReadingMode.KINDLE_REFLOW) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(text = "Kindle Font Size", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        IconButton(
+                            onClick = { viewModel.updateFontSize(settings.fontSize - 2) },
+                            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                        ) {
+                            Text("A-", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                        Text(
+                            text = "${settings.fontSize} sp (Auto-wrapping)",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = AmberPrimary)
+                        )
+                        IconButton(
+                            onClick = { viewModel.updateFontSize(settings.fontSize + 2) },
+                            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                        ) {
+                            Text("A+", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // Theme Section
                 Text(text = "Color Theme", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
@@ -662,6 +738,104 @@ fun ReaderScreen(
 }
 
 @Composable
+fun KindlePageContent(
+    pageIndex: Int,
+    settings: com.example.data.model.ReaderSettings,
+    widthPx: Int,
+    heightPx: Int,
+    colorFilter: ColorFilter?,
+    viewModel: ReaderViewModel
+) {
+    if (settings.readingMode == ReadingMode.KINDLE_REFLOW) {
+        KindleReflowPageItem(
+            pageIndex = pageIndex,
+            settings = settings,
+            colorFilter = colorFilter,
+            viewModel = viewModel,
+            widthPx = widthPx,
+            heightPx = heightPx
+        )
+    } else {
+        PdfPageItem(
+            pageIndex = pageIndex,
+            widthPx = widthPx,
+            heightPx = heightPx,
+            colorFilter = colorFilter,
+            cropMargins = settings.cropMargins,
+            viewModel = viewModel
+        )
+    }
+}
+
+@Composable
+fun KindleReflowPageItem(
+    pageIndex: Int,
+    settings: com.example.data.model.ReaderSettings,
+    colorFilter: ColorFilter?,
+    viewModel: ReaderViewModel,
+    widthPx: Int,
+    heightPx: Int
+) {
+    val textState = produceState<String?>(initialValue = null, pageIndex) {
+        value = viewModel.getPageText(pageIndex)
+    }
+    val text = textState.value
+
+    if (text == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = AmberPrimary, modifier = Modifier.size(36.dp))
+        }
+    } else if (text.isEmpty()) {
+        // Scanned image PDF without selectable text -> Fallback to image with auto-width fit!
+        PdfPageItem(
+            pageIndex = pageIndex,
+            widthPx = widthPx,
+            heightPx = heightPx,
+            colorFilter = colorFilter,
+            cropMargins = true,
+            viewModel = viewModel
+        )
+    } else {
+        // Kindle Smart Text Reflow Reading Mode!
+        val textColor = when (settings.theme) {
+            com.example.data.model.ReaderTheme.LIGHT -> Color.Black
+            com.example.data.model.ReaderTheme.SEPIA -> SepiaPageText
+            com.example.data.model.ReaderTheme.NIGHT -> Color(0xFFE0D8C8)
+        }
+        val scrollState = rememberScrollState()
+        
+        SelectionContainer(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, _, zoom, _ ->
+                        if (zoom != 1.0f) {
+                            val newSize = (settings.fontSize * zoom).toInt().coerceIn(12, 38)
+                            if (newSize != settings.fontSize) {
+                                viewModel.updateFontSize(newSize)
+                            }
+                        }
+                    }
+                }
+                .verticalScroll(scrollState)
+                .padding(horizontal = 22.dp, vertical = 24.dp)
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = settings.fontSize.sp,
+                    lineHeight = (settings.fontSize * settings.lineHeight).sp,
+                    color = textColor,
+                    fontWeight = FontWeight.Normal
+                ),
+                textAlign = TextAlign.Start,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
 fun PdfPageItem(
     pageIndex: Int,
     widthPx: Int,
@@ -670,11 +844,9 @@ fun PdfPageItem(
     cropMargins: Boolean,
     viewModel: ReaderViewModel
 ) {
-    // Zoom state
-    var scale by remember { mutableFloatStateOf(if (cropMargins) 1.08f else 1.0f) }
-    LaunchedEffect(cropMargins) {
-        scale = if (cropMargins) 1.08f else 1.0f
-    }
+    // Zoom & Pan state for original image mode
+    var scale by remember { mutableFloatStateOf(if (cropMargins) 1.0f else 1.0f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
 
     val bitmapState = produceState<Bitmap?>(initialValue = null, pageIndex, widthPx, heightPx) {
         value = viewModel.getPageBitmap(pageIndex, widthPx, heightPx)
@@ -685,8 +857,13 @@ fun PdfPageItem(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTransformGestures { _, _, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(1.0f, 3.5f)
+                detectTransformGestures { _, pan, zoom, _ ->
+                    scale = (scale * zoom).coerceIn(1.0f, 4.0f)
+                    if (scale > 1.0f) {
+                        offset += pan
+                    } else {
+                        offset = Offset.Zero
+                    }
                 }
             },
         contentAlignment = Alignment.Center
@@ -695,13 +872,15 @@ fun PdfPageItem(
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = "Page ${pageIndex + 1}",
-                contentScale = ContentScale.Fit,
+                contentScale = if (cropMargins) ContentScale.FillWidth else ContentScale.Fit,
                 colorFilter = colorFilter,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer(
                         scaleX = scale,
-                        scaleY = scale
+                        scaleY = scale,
+                        translationX = offset.x,
+                        translationY = offset.y
                     )
             )
         } else {

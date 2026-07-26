@@ -19,10 +19,16 @@ import com.example.ui.screens.ReaderScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.LibraryViewModel
 import com.example.ui.viewmodel.ReaderViewModel
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    try {
+      PDFBoxResourceLoader.init(applicationContext)
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
     enableEdgeToEdge()
     setContent {
       MyApplicationTheme {

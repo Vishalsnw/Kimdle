@@ -126,6 +126,18 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         _settings.value = _settings.value.copy(cropMargins = crop)
     }
 
+    fun updateReadingMode(mode: com.example.data.model.ReadingMode) {
+        _settings.value = _settings.value.copy(readingMode = mode)
+    }
+
+    fun updateFontSize(size: Int) {
+        _settings.value = _settings.value.copy(fontSize = size.coerceIn(12, 38))
+    }
+
+    suspend fun getPageText(pageIndex: Int): String? {
+        return pdfRendererHelper?.extractPageText(pageIndex)
+    }
+
     suspend fun getPageBitmap(pageIndex: Int, width: Int, height: Int): Bitmap? {
         return pdfRendererHelper?.renderPage(pageIndex, width, height)
     }
