@@ -776,16 +776,16 @@ fun KindleReflowPageItem(
     widthPx: Int,
     heightPx: Int
 ) {
-    val textState = produceState<String?>(initialValue = null, pageIndex) {
-        value = viewModel.getPageText(pageIndex)
+    val contentState = produceState<com.example.pdf.ReflowPageContent?>(initialValue = null, pageIndex) {
+        value = viewModel.getReflowContent(pageIndex)
     }
-    val text = textState.value
+    val content = contentState.value
 
-    if (text == null) {
+    if (content == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = AmberPrimary, modifier = Modifier.size(36.dp))
         }
-    } else if (text.isEmpty()) {
+    } else if (content.text.isEmpty() && content.images.isEmpty()) {
         // Scanned image PDF without selectable text -> Fallback to image with auto-width fit!
         PdfPageItem(
             pageIndex = pageIndex,
@@ -796,7 +796,7 @@ fun KindleReflowPageItem(
             viewModel = viewModel
         )
     } else {
-        // Kindle Smart Text Reflow Reading Mode!
+        // Kindle Smart Text Reflow & Inline Images Reading Mode!
         val textColor = when (settings.theme) {
             com.example.data.model.ReaderTheme.LIGHT -> Color.Black
             com.example.data.model.ReaderTheme.SEPIA -> SepiaPageText
@@ -820,17 +820,37 @@ fun KindleReflowPageItem(
                 .verticalScroll(scrollState)
                 .padding(horizontal = 22.dp, vertical = 24.dp)
         ) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = settings.fontSize.sp,
-                    lineHeight = (settings.fontSize * settings.lineHeight).sp,
-                    color = textColor,
-                    fontWeight = FontWeight.Normal
-                ),
-                textAlign = TextAlign.Start,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Render embedded PDF images/illustrations cleanly formatted inline!
+                content.images.forEachIndexed { index, bmp ->
+                    Image(
+                        bitmap = bmp.asImageBitmap(),
+                        contentDescription = "Page Illustration ${index + 1}",
+                        contentScale = ContentScale.FillWidth,
+                        colorFilter = colorFilter,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                }
+
+                if (content.text.isNotEmpty()) {
+                    Text(
+                        text = content.text,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = settings.fontSize.sp,
+                            lineHeight = (settings.fontSize * settings.lineHeight).sp,
+                            color = textColor,
+                            fontWeight = FontWeight.Normal
+                        ),
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
         }
     }
 }

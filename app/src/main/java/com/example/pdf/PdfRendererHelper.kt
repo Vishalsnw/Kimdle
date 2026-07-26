@@ -11,6 +11,11 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
+data class ReflowPageContent(
+    val text: String,
+    val images: List<Bitmap>
+)
+
 class PdfRendererHelper(private val filePath: String) {
     private var fileDescriptor: ParcelFileDescriptor? = null
     private var pdfRenderer: PdfRenderer? = null
@@ -19,8 +24,8 @@ class PdfRendererHelper(private val filePath: String) {
 
     // Memory cache for up to 12 rendered page bitmaps for ultra-smooth Kindle page turning
     private val pageCache = LruCache<Int, Bitmap>(12)
-    // Cache for extracted text strings for instant reflow reading
-    private val textCache = LruCache<Int, String>(50)
+    // Cache for extracted text and images for instant reflow reading
+    private val reflowCache = LruCache<Int, ReflowPageContent>(20)
 
     suspend fun open(): Int = withContext(Dispatchers.IO) {
         try {
@@ -72,9 +77,9 @@ class PdfRendererHelper(private val filePath: String) {
         }
     }
 
-    suspend fun extractPageText(pageIndex: Int): String? = withContext(Dispatchers.IO) {
+    suspend fun extractReflowContent(pageIndex: Int): ReflowPageContent? = withContext(Dispatchers.IO) {
         if (pageIndex < 0 || pageIndex >= totalPagesCount) return@withContext null
-        val cached = textCache.get(pageIndex)
+        val cached = reflowCache.get(pageIndex)
         if (cached != null) return@withContext cached
 
         try {
@@ -86,12 +91,35 @@ class PdfRendererHelper(private val filePath: String) {
                     }
                 }
                 val doc = pdDocument ?: return@withContext null
+                val page = doc.getPage(pageIndex)
+
+                // Extract images from page resources
+                val images = mutableListOf<Bitmap>()
+                val resources = page.resources
+                if (resources != null) {
+                    for (name in resources.xObjectNames) {
+                        try {
+                            val xobject = resources.getXObject(name)
+                            if (xobject is com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject) {
+                                val bmp = xobject.image
+                                if (bmp != null && bmp.width > 50 && bmp.height > 50) {
+                                    images.add(bmp)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+
                 val stripper = com.tom_roush.pdfbox.text.PDFTextStripper()
                 stripper.startPage = pageIndex + 1
                 stripper.endPage = pageIndex + 1
                 val text = stripper.getText(doc)?.trim() ?: ""
-                textCache.put(pageIndex, text)
-                text
+
+                val content = ReflowPageContent(text = text, images = images)
+                reflowCache.put(pageIndex, content)
+                content
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -99,11 +127,15 @@ class PdfRendererHelper(private val filePath: String) {
         }
     }
 
+    suspend fun extractPageText(pageIndex: Int): String? {
+        return extractReflowContent(pageIndex)?.text
+    }
+
     suspend fun close() = withContext(Dispatchers.IO) {
         try {
             synchronized(this@PdfRendererHelper) {
                 pageCache.evictAll()
-                textCache.evictAll()
+                reflowCache.evictAll()
                 pdfRenderer?.close()
                 pdfRenderer = null
                 pdDocument?.close()

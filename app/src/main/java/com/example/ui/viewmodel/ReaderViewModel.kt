@@ -12,6 +12,7 @@ import com.example.data.model.ReaderTheme
 import com.example.data.model.TransitionStyle
 import com.example.data.repository.BookRepository
 import com.example.pdf.PdfRendererHelper
+import com.example.pdf.ReflowPageContent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -136,6 +137,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun getPageText(pageIndex: Int): String? {
         return pdfRendererHelper?.extractPageText(pageIndex)
+    }
+
+    suspend fun getReflowContent(pageIndex: Int): ReflowPageContent? {
+        return pdfRendererHelper?.extractReflowContent(pageIndex)
     }
 
     suspend fun getPageBitmap(pageIndex: Int, width: Int, height: Int): Bitmap? {
