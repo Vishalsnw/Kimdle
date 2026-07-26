@@ -1,0 +1,6 @@
+{
+  "name": "PDF Book Reader",
+  "description": "A Kindle-style digital book reader that opens any PDF with realistic page-flip transitions, custom themes (Sepia, Night, Light), bookmarks, and reading stats.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
