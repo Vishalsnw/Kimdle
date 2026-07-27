@@ -83,7 +83,7 @@ class PdfRendererHelper(private val filePath: String) {
         if (cached != null) return@withContext cached
 
         try {
-            synchronized(this@PdfRendererHelper) {
+            val (text, images, needsFallback) = synchronized(this@PdfRendererHelper) {
                 if (pdDocument == null) {
                     val file = File(filePath)
                     if (file.exists()) {
@@ -95,17 +95,32 @@ class PdfRendererHelper(private val filePath: String) {
 
                 // Extract images from page resources including Form XObjects recursively
                 val images = mutableListOf<Bitmap>()
-                extractImagesRecursive(page.resources, images)
+                val hasImageXObject = extractImagesRecursive(page.resources, images)
 
                 val stripper = com.tom_roush.pdfbox.text.PDFTextStripper()
                 stripper.startPage = pageIndex + 1
                 stripper.endPage = pageIndex + 1
                 val text = stripper.getText(doc)?.trim() ?: ""
 
-                val content = ReflowPageContent(text = text, images = images)
-                reflowCache.put(pageIndex, content)
-                content
+                Triple(text, images, hasImageXObject && images.isEmpty())
+            } ?: return@withContext null
+
+            // If image XObjects exist but PDFBox failed to decode them into Bitmaps
+            // (due to CCITTFax, JPXDecode, or CMYK restrictions in Android), fall back to native PdfRenderer outside synchronized block!
+            if (needsFallback) {
+                try {
+                    val fallbackBmp = renderPage(pageIndex, 1080, 1440)
+                    if (fallbackBmp != null) {
+                        images.add(fallbackBmp)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
+
+            val content = ReflowPageContent(text = text, images = images)
+            reflowCache.put(pageIndex, content)
+            content
         } catch (e: Exception) {
             e.printStackTrace()
             null
@@ -117,8 +132,9 @@ class PdfRendererHelper(private val filePath: String) {
         images: MutableList<Bitmap>,
         visited: MutableSet<String> = mutableSetOf(),
         depth: Int = 0
-    ) {
-        if (resources == null || depth > 10) return
+    ): Boolean {
+        if (resources == null || depth > 10) return false
+        var foundImageXObject = false
         try {
             for (name in resources.xObjectNames) {
                 try {
@@ -127,6 +143,7 @@ class PdfRendererHelper(private val filePath: String) {
                     if (!visited.add(objKey)) continue
 
                     if (xobject is com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject) {
+                        foundImageXObject = true
                         try {
                             val bmp = xobject.image
                             if (bmp != null && bmp.width > 10 && bmp.height > 10) {
@@ -136,7 +153,9 @@ class PdfRendererHelper(private val filePath: String) {
                             e.printStackTrace()
                         }
                     } else if (xobject is com.tom_roush.pdfbox.pdmodel.graphics.form.PDFormXObject) {
-                        extractImagesRecursive(xobject.resources, images, visited, depth + 1)
+                        if (extractImagesRecursive(xobject.resources, images, visited, depth + 1)) {
+                            foundImageXObject = true
+                        }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -145,6 +164,7 @@ class PdfRendererHelper(private val filePath: String) {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+        return foundImageXObject
     }
 
     suspend fun extractPageText(pageIndex: Int): String? {
