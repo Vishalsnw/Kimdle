@@ -49,22 +49,27 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private val _isBookmarked = MutableStateFlow(false)
     val isBookmarked: StateFlow<Boolean> = _isBookmarked
 
+    private val _isBookLoading = MutableStateFlow(true)
+    val isBookLoading: StateFlow<Boolean> = _isBookLoading
+
     fun loadBook(bookId: Long) {
         viewModelScope.launch {
+            _isBookLoading.value = true
+            _currentBook.value = null
             // Close previous renderer if any
             pdfRendererHelper?.close()
 
             val book = repository.getBookByIdSync(bookId)
             if (book != null) {
-                _currentBook.value = book
-                _currentPageIndex.value = book.currentPage
-                
                 pdfRendererHelper = PdfRendererHelper(book.filePath)
                 val total = pdfRendererHelper?.open() ?: 0
-                if (total > 0 && book.totalPages != total) {
-                    val updated = book.copy(totalPages = total)
-                    _currentBook.value = updated
-                }
+                val updated = if (total > 0 && book.totalPages != total) {
+                    book.copy(totalPages = total)
+                } else book
+
+                _currentPageIndex.value = updated.currentPage
+                _currentBook.value = updated
+                _isBookLoading.value = false
 
                 // Observe bookmarks
                 bookmarkJob?.cancel()
@@ -74,6 +79,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         checkIfCurrentPageBookmarked(list, _currentPageIndex.value)
                     }
                 }
+            } else {
+                _isBookLoading.value = false
             }
         }
     }

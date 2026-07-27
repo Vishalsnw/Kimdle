@@ -75,6 +75,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -121,6 +122,7 @@ fun ReaderScreen(
     onBack: () -> Unit
 ) {
     val book by viewModel.currentBook.collectAsStateWithLifecycle()
+    val isBookLoading by viewModel.isBookLoading.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val isOverlayVisible by viewModel.isOverlayVisible.collectAsStateWithLifecycle()
     val currentPageIndex by viewModel.currentPageIndex.collectAsStateWithLifecycle()
@@ -131,6 +133,8 @@ fun ReaderScreen(
     var showBookmarksSheet by remember { mutableStateOf(false) }
     var showAddBookmarkDialog by remember { mutableStateOf(false) }
     var bookmarkNoteText by remember { mutableStateOf("") }
+    var currentSubPage by remember { mutableIntStateOf(0) }
+    var totalSubPages by remember { mutableIntStateOf(1) }
 
     val scope = rememberCoroutineScope()
 
@@ -192,6 +196,14 @@ fun ReaderScreen(
     val totalPages = book?.totalPages ?: 1
     val pagerState = rememberPagerState(initialPage = currentPageIndex) { totalPages }
 
+    var previousPageIndex by remember { mutableIntStateOf(currentPageIndex) }
+    val isMovingBackwards = remember(currentPageIndex, previousPageIndex) {
+        currentPageIndex < previousPageIndex
+    }
+    LaunchedEffect(currentPageIndex) {
+        previousPageIndex = currentPageIndex
+    }
+
     // Sync pager with ViewModel state
     LaunchedEffect(currentPageIndex) {
         if (pagerState.currentPage != currentPageIndex && currentPageIndex < totalPages) {
@@ -208,9 +220,13 @@ fun ReaderScreen(
             .fillMaxSize()
             .background(currentThemeBg)
     ) {
-        if (book == null) {
+        if (book == null || isBookLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AmberPrimary)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = AmberPrimary, modifier = Modifier.size(48.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Opening Kindle Book...", style = MaterialTheme.typography.bodyMedium, color = currentThemeText.copy(alpha = 0.7f))
+                }
             }
         } else {
             // Reader Content Canvas
@@ -223,31 +239,31 @@ fun ReaderScreen(
                 with(density) { configuration.screenHeightDp.dp.roundToPx() }
             }
 
-            if (settings.transitionStyle == TransitionStyle.HORIZONTAL_FLIP) {
-                // Horizontal Kindle Page Flip Mode
+            val onNextPdfPage = {
+                if (pagerState.currentPage < totalPages - 1) {
+                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                }
+            }
+            val onPrevPdfPage = {
+                if (pagerState.currentPage > 0) {
+                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                }
+            }
+
+            if (settings.readingMode == ReadingMode.KINDLE_REFLOW || settings.transitionStyle == TransitionStyle.HORIZONTAL_FLIP) {
+                // Horizontal Kindle Page Flip & Reflow Mode
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectTapGestures { offset ->
-                                val width = size.width
-                                when {
-                                    offset.x < width * 0.22f -> {
-                                        // Tap left edge -> Previous page
-                                        if (pagerState.currentPage > 0) {
-                                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
-                                        }
-                                    }
-                                    offset.x > width * 0.78f -> {
-                                        // Tap right edge -> Next page
-                                        if (pagerState.currentPage < totalPages - 1) {
-                                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
-                                        }
-                                    }
-                                    else -> {
-                                        // Tap center -> Toggle overlays
-                                        viewModel.toggleOverlay()
+                        .pointerInput(settings.readingMode) {
+                            if (settings.readingMode != ReadingMode.KINDLE_REFLOW) {
+                                detectTapGestures { offset ->
+                                    val width = size.width
+                                    when {
+                                        offset.x < width * 0.22f -> onPrevPdfPage()
+                                        offset.x > width * 0.78f -> onNextPdfPage()
+                                        else -> viewModel.toggleOverlay()
                                     }
                                 }
                             }
@@ -259,7 +275,17 @@ fun ReaderScreen(
                         widthPx = screenWidthPx,
                         heightPx = screenHeightPx,
                         colorFilter = pdfColorFilter,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        isMovingBackwards = isMovingBackwards,
+                        onNextPdfPage = onNextPdfPage,
+                        onPrevPdfPage = onPrevPdfPage,
+                        onToggleOverlay = { viewModel.toggleOverlay() },
+                        onSubPageChanged = { current, total ->
+                            if (pageIndex == currentPageIndex) {
+                                currentSubPage = current
+                                totalSubPages = total
+                            }
+                        }
                     )
                 }
             } else {
@@ -288,7 +314,17 @@ fun ReaderScreen(
                                 widthPx = screenWidthPx,
                                 heightPx = screenHeightPx,
                                 colorFilter = pdfColorFilter,
-                                viewModel = viewModel
+                                viewModel = viewModel,
+                                isMovingBackwards = isMovingBackwards,
+                                onNextPdfPage = onNextPdfPage,
+                                onPrevPdfPage = onPrevPdfPage,
+                                onToggleOverlay = { viewModel.toggleOverlay() },
+                                onSubPageChanged = { current, total ->
+                                    if (pageIndex == currentPageIndex) {
+                                        currentSubPage = current
+                                        totalSubPages = total
+                                    }
+                                }
                             )
                         }
                     }
@@ -428,8 +464,13 @@ fun ReaderScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val pageDisplay = if (settings.readingMode == ReadingMode.KINDLE_REFLOW && totalSubPages > 1) {
+                                "Page ${currentPageIndex + 1} (${currentSubPage + 1}/$totalSubPages)"
+                            } else {
+                                "Page ${currentPageIndex + 1} of $totalPages"
+                            }
                             Text(
-                                text = "Page ${currentPageIndex + 1} of $totalPages",
+                                text = pageDisplay,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
@@ -447,6 +488,36 @@ fun ReaderScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // Persistent subtle Kindle Reading Status Footer when overlay is hidden
+            if (!isOverlayVisible) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val pageStr = if (settings.readingMode == ReadingMode.KINDLE_REFLOW && totalSubPages > 1) {
+                        "Page ${currentPageIndex + 1} (${currentSubPage + 1}/$totalSubPages)"
+                    } else {
+                        "Page ${currentPageIndex + 1} of $totalPages"
+                    }
+                    Text(
+                        text = pageStr,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = currentThemeText.copy(alpha = 0.5f)
+                    )
+                    val progressPercent = if (totalPages > 0) ((currentPageIndex + 1) * 100) / totalPages else 0
+                    Text(
+                        text = "$progressPercent% Read • Kindle",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                        color = currentThemeText.copy(alpha = 0.5f)
+                    )
                 }
             }
         }
@@ -737,6 +808,94 @@ fun ReaderScreen(
     }
 }
 
+private fun chunkTextIntoPages(text: String, linesPerPage: Int, charsPerLine: Int): List<String> {
+    if (text.isEmpty()) return emptyList()
+    
+    val pages = mutableListOf<String>()
+    val paragraphs = text.split("\n")
+    
+    var currentPageText = StringBuilder()
+    var currentLinesUsed = 0.0
+    var currentLineChars = 0
+    
+    for (para in paragraphs) {
+        val trimmedPara = para.trim()
+        if (trimmedPara.isEmpty()) {
+            if (currentPageText.isNotEmpty() && currentLinesUsed + 1.0 <= linesPerPage) {
+                currentPageText.append("\n\n")
+                currentLinesUsed += 1.0
+                currentLineChars = 0
+            }
+            continue
+        }
+        
+        val words = trimmedPara.split(Regex("\\s+"))
+        for (word in words) {
+            val wordLen = word.length
+            val neededChars = if (currentLineChars == 0) wordLen else currentLineChars + 1 + wordLen
+            
+            if (neededChars > charsPerLine && currentLineChars > 0) {
+                // Move to next line
+                currentLinesUsed += 1.0
+                currentLineChars = 0
+                
+                // If page is full, push to next page!
+                if (currentLinesUsed >= linesPerPage && currentPageText.isNotEmpty()) {
+                    pages.add(currentPageText.toString().trim())
+                    currentPageText = StringBuilder()
+                    currentLinesUsed = 0.0
+                } else if (currentPageText.isNotEmpty()) {
+                    currentPageText.append("\n")
+                }
+            } else if (currentLineChars > 0) {
+                currentPageText.append(" ")
+                currentLineChars += 1
+            }
+            
+            if (currentPageText.isEmpty() && currentLinesUsed >= linesPerPage) {
+                currentLinesUsed = 0.0
+            }
+            
+            currentPageText.append(word)
+            
+            if (currentLineChars == 0) {
+                currentLineChars = wordLen
+            } else {
+                currentLineChars += wordLen - 1
+            }
+            
+            while (currentLineChars >= charsPerLine) {
+                currentLinesUsed += 1.0
+                currentLineChars -= charsPerLine
+                if (currentLinesUsed >= linesPerPage && currentPageText.isNotEmpty()) {
+                    pages.add(currentPageText.toString().trim())
+                    currentPageText = StringBuilder()
+                    currentLinesUsed = 0.0
+                    currentLineChars = 0
+                }
+            }
+        }
+        
+        if (currentLineChars > 0) {
+            currentLinesUsed += 1.0
+            currentLineChars = 0
+        }
+        if (currentPageText.isNotEmpty() && currentLinesUsed + 1.0 <= linesPerPage) {
+            currentPageText.append("\n\n")
+            currentLinesUsed += 0.8
+        }
+    }
+    
+    if (currentPageText.isNotEmpty()) {
+        val remaining = currentPageText.toString().trim()
+        if (remaining.isNotEmpty()) {
+            pages.add(remaining)
+        }
+    }
+    
+    return if (pages.isEmpty()) listOf(text) else pages
+}
+
 @Composable
 fun KindlePageContent(
     pageIndex: Int,
@@ -744,7 +903,12 @@ fun KindlePageContent(
     widthPx: Int,
     heightPx: Int,
     colorFilter: ColorFilter?,
-    viewModel: ReaderViewModel
+    viewModel: ReaderViewModel,
+    isMovingBackwards: Boolean = false,
+    onNextPdfPage: () -> Unit = {},
+    onPrevPdfPage: () -> Unit = {},
+    onToggleOverlay: () -> Unit = {},
+    onSubPageChanged: (Int, Int) -> Unit = { _, _ -> }
 ) {
     if (settings.readingMode == ReadingMode.KINDLE_REFLOW) {
         KindleReflowPageItem(
@@ -753,7 +917,12 @@ fun KindlePageContent(
             colorFilter = colorFilter,
             viewModel = viewModel,
             widthPx = widthPx,
-            heightPx = heightPx
+            heightPx = heightPx,
+            isMovingBackwards = isMovingBackwards,
+            onNextPdfPage = onNextPdfPage,
+            onPrevPdfPage = onPrevPdfPage,
+            onToggleOverlay = onToggleOverlay,
+            onSubPageChanged = onSubPageChanged
         )
     } else {
         PdfPageItem(
@@ -762,7 +931,12 @@ fun KindlePageContent(
             heightPx = heightPx,
             colorFilter = colorFilter,
             cropMargins = settings.cropMargins,
-            viewModel = viewModel
+            viewModel = viewModel,
+            isMovingBackwards = isMovingBackwards,
+            onNextPdfPage = onNextPdfPage,
+            onPrevPdfPage = onPrevPdfPage,
+            onToggleOverlay = onToggleOverlay,
+            onSubPageChanged = onSubPageChanged
         )
     }
 }
@@ -774,10 +948,18 @@ fun KindleReflowPageItem(
     colorFilter: ColorFilter?,
     viewModel: ReaderViewModel,
     widthPx: Int,
-    heightPx: Int
+    heightPx: Int,
+    isMovingBackwards: Boolean,
+    onNextPdfPage: () -> Unit,
+    onPrevPdfPage: () -> Unit,
+    onToggleOverlay: () -> Unit,
+    onSubPageChanged: (Int, Int) -> Unit
 ) {
-    val contentState = produceState<com.example.pdf.ReflowPageContent?>(initialValue = null, pageIndex) {
-        value = viewModel.getReflowContent(pageIndex)
+    val isBookLoading by viewModel.isBookLoading.collectAsStateWithLifecycle()
+    val contentState = produceState<com.example.pdf.ReflowPageContent?>(initialValue = null, pageIndex, isBookLoading) {
+        if (!isBookLoading) {
+            value = viewModel.getReflowContent(pageIndex)
+        }
     }
     val content = contentState.value
 
@@ -793,7 +975,12 @@ fun KindleReflowPageItem(
             heightPx = heightPx,
             colorFilter = colorFilter,
             cropMargins = true,
-            viewModel = viewModel
+            viewModel = viewModel,
+            isMovingBackwards = isMovingBackwards,
+            onNextPdfPage = onNextPdfPage,
+            onPrevPdfPage = onPrevPdfPage,
+            onToggleOverlay = onToggleOverlay,
+            onSubPageChanged = onSubPageChanged
         )
     } else {
         // Kindle Smart Text Reflow & Inline Images Reading Mode!
@@ -802,14 +989,49 @@ fun KindleReflowPageItem(
             com.example.data.model.ReaderTheme.SEPIA -> SepiaPageText
             com.example.data.model.ReaderTheme.NIGHT -> Color(0xFFE0D8C8)
         }
-        val scrollState = rememberScrollState()
-        
-        SelectionContainer(
+        val configuration = LocalConfiguration.current
+        val screenWidthDp = configuration.screenWidthDp
+        val screenHeightDp = configuration.screenHeightDp
+
+        val linesPerPage = remember(settings.fontSize, settings.lineHeight, screenHeightDp) {
+            ((screenHeightDp - 140) / (settings.fontSize * settings.lineHeight)).toInt().coerceAtLeast(4)
+        }
+        val charsPerLine = remember(settings.fontSize, screenWidthDp) {
+            ((screenWidthDp - 44) / (settings.fontSize * 0.53f)).toInt().coerceAtLeast(10)
+        }
+
+        val chunks = remember(content.text, settings.fontSize, linesPerPage, charsPerLine) {
+            chunkTextIntoPages(content.text, linesPerPage, charsPerLine)
+        }
+
+        val initialSubPage = if (isMovingBackwards && chunks.size > 1) chunks.size - 1 else 0
+        val subPagerState = rememberPagerState(initialPage = initialSubPage) { chunks.size }
+
+        var lastChunkCount by remember { mutableIntStateOf(chunks.size) }
+        LaunchedEffect(chunks.size) {
+            if (lastChunkCount != chunks.size && chunks.isNotEmpty()) {
+                val approxRatio = subPagerState.currentPage.toFloat() / lastChunkCount.coerceAtLeast(1)
+                val newPage = (approxRatio * chunks.size).toInt().coerceIn(0, chunks.size - 1)
+                if (newPage != subPagerState.currentPage) {
+                    subPagerState.scrollToPage(newPage)
+                }
+                lastChunkCount = chunks.size
+            }
+        }
+
+        LaunchedEffect(subPagerState.currentPage, chunks.size) {
+            onSubPageChanged(subPagerState.currentPage, chunks.size)
+        }
+
+        val scope = rememberCoroutineScope()
+
+        HorizontalPager(
+            state = subPagerState,
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectTransformGestures { _, _, zoom, _ ->
-                        if (zoom != 1.0f) {
+                        if (zoom != 1.0f && (zoom < 0.95f || zoom > 1.05f)) {
                             val newSize = (settings.fontSize * zoom).toInt().coerceIn(12, 38)
                             if (newSize != settings.fontSize) {
                                 viewModel.updateFontSize(newSize)
@@ -817,29 +1039,57 @@ fun KindleReflowPageItem(
                         }
                     }
                 }
-                .verticalScroll(scrollState)
-                .padding(horizontal = 22.dp, vertical = 24.dp)
-        ) {
+                .pointerInput(subPagerState.currentPage, chunks.size) {
+                    detectTapGestures { offset ->
+                        val width = size.width
+                        when {
+                            offset.x < width * 0.22f -> {
+                                if (subPagerState.currentPage > 0) {
+                                    scope.launch { subPagerState.animateScrollToPage(subPagerState.currentPage - 1) }
+                                } else {
+                                    onPrevPdfPage()
+                                }
+                            }
+                            offset.x > width * 0.78f -> {
+                                if (subPagerState.currentPage < chunks.size - 1) {
+                                    scope.launch { subPagerState.animateScrollToPage(subPagerState.currentPage + 1) }
+                                } else {
+                                    onNextPdfPage()
+                                }
+                            }
+                            else -> {
+                                onToggleOverlay()
+                            }
+                        }
+                    }
+                }
+        ) { subIndex ->
+            val chunkText = chunks.getOrNull(subIndex) ?: ""
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 22.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.Top
             ) {
                 // Render embedded PDF images/illustrations cleanly formatted inline!
-                content.images.forEachIndexed { index, bmp ->
-                    Image(
-                        bitmap = bmp.asImageBitmap(),
-                        contentDescription = "Page Illustration ${index + 1}",
-                        contentScale = ContentScale.FillWidth,
-                        colorFilter = colorFilter,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                    )
+                if (subIndex == 0 && content.images.isNotEmpty()) {
+                    content.images.forEachIndexed { index, bmp ->
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "Page Illustration ${index + 1}",
+                            contentScale = ContentScale.FillWidth,
+                            colorFilter = colorFilter,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 14.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    }
                 }
 
-                if (content.text.isNotEmpty()) {
+                if (chunkText.isNotEmpty()) {
                     Text(
-                        text = content.text,
+                        text = chunkText,
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = settings.fontSize.sp,
                             lineHeight = (settings.fontSize * settings.lineHeight).sp,
@@ -862,14 +1112,26 @@ fun PdfPageItem(
     heightPx: Int,
     colorFilter: ColorFilter?,
     cropMargins: Boolean,
-    viewModel: ReaderViewModel
+    viewModel: ReaderViewModel,
+    isMovingBackwards: Boolean = false,
+    onNextPdfPage: () -> Unit = {},
+    onPrevPdfPage: () -> Unit = {},
+    onToggleOverlay: () -> Unit = {},
+    onSubPageChanged: (Int, Int) -> Unit = { _, _ -> }
 ) {
     // Zoom & Pan state for original image mode
     var scale by remember { mutableFloatStateOf(if (cropMargins) 1.0f else 1.0f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
-    val bitmapState = produceState<Bitmap?>(initialValue = null, pageIndex, widthPx, heightPx) {
-        value = viewModel.getPageBitmap(pageIndex, widthPx, heightPx)
+    val isBookLoading by viewModel.isBookLoading.collectAsStateWithLifecycle()
+    val bitmapState = produceState<Bitmap?>(initialValue = null, pageIndex, widthPx, heightPx, isBookLoading) {
+        if (!isBookLoading) {
+            value = viewModel.getPageBitmap(pageIndex, widthPx, heightPx)
+        }
+    }
+
+    LaunchedEffect(pageIndex) {
+        onSubPageChanged(0, 1)
     }
 
     val bitmap = bitmapState.value
