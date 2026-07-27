@@ -80,6 +80,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1024,6 +1025,13 @@ fun ReflowPageItem(
         }
 
         val scope = rememberCoroutineScope()
+        val currentFontSize by rememberUpdatedState(settings.fontSize)
+        var accumulatedFontSize by remember { mutableFloatStateOf(settings.fontSize.toFloat()) }
+        LaunchedEffect(settings.fontSize) {
+            if (kotlin.math.abs(accumulatedFontSize - settings.fontSize) >= 1f) {
+                accumulatedFontSize = settings.fontSize.toFloat()
+            }
+        }
 
         HorizontalPager(
             state = subPagerState,
@@ -1031,9 +1039,10 @@ fun ReflowPageItem(
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectTransformGestures { _, _, zoom, _ ->
-                        if (zoom != 1.0f && (zoom < 0.95f || zoom > 1.05f)) {
-                            val newSize = (settings.fontSize * zoom).toInt().coerceIn(12, 38)
-                            if (newSize != settings.fontSize) {
+                        if (zoom != 1.0f) {
+                            accumulatedFontSize = (accumulatedFontSize * zoom).coerceIn(12f, 38f)
+                            val newSize = kotlin.math.round(accumulatedFontSize).toInt()
+                            if (newSize != currentFontSize) {
                                 viewModel.updateFontSize(newSize)
                             }
                         }
