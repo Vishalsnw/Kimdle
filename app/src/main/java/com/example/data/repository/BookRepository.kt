@@ -74,12 +74,27 @@ class BookRepository(private val bookDao: BookDao) {
 
     suspend fun initializeSampleBooksIfNeeded(context: Context) = withContext(Dispatchers.IO) {
         val currentBooks = bookDao.getAllBooks().first()
+        val coversDir = File(context.filesDir, "covers").apply { mkdirs() }
         if (currentBooks.isNotEmpty()) {
-            return@withContext
+            for (book in currentBooks) {
+                if (!File(book.filePath).exists()) {
+                    bookDao.deleteBookById(book.id)
+                    continue
+                }
+                if (book.coverImagePath.isNullOrEmpty() || !File(book.coverImagePath).exists()) {
+                    val coverFile = File(coversDir, "cover_${book.id}.jpg")
+                    val coverPath = PdfRendererHelper.renderThumbnail(book.filePath, coverFile.absolutePath)
+                    if (coverPath != null) {
+                        bookDao.updateBook(book.copy(coverImagePath = coverPath))
+                    }
+                }
+            }
+            if (bookDao.getAllBooks().first().isNotEmpty()) {
+                return@withContext
+            }
         }
 
         val sampleFiles = SampleBookGenerator.generateAllSampleBooks(context)
-        val coversDir = File(context.filesDir, "covers").apply { mkdirs() }
 
         val sampleMeta = listOf(
             Triple("The Digital Reader Guide", "Editorial Team", "A 5-chapter guide on custom themes, reading stats, and gestures."),

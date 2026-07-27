@@ -967,7 +967,7 @@ fun ReflowPageItem(
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = AmberPrimary, modifier = Modifier.size(36.dp))
         }
-    } else if (content.images.isEmpty() && content.text.trim().length < 120) {
+    } else if (content.images.isEmpty() && content.text.trim().length < 350) {
         // Scanned page, diagram, or complex layout without selectable text -> Fallback to original image!
         PdfPageItem(
             pageIndex = pageIndex,
