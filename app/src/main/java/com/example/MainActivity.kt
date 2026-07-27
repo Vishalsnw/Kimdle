@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
     setContent {
       MyApplicationTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-          KindleAppNavigation()
+          ReaderAppNavigation()
         }
       }
     }
@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun KindleAppNavigation() {
+fun ReaderAppNavigation() {
   val navController = rememberNavController()
   val libraryViewModel: LibraryViewModel = viewModel()
   val readerViewModel: ReaderViewModel = viewModel()

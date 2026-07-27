@@ -127,7 +127,7 @@ fun LibraryScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Kindle PDF Reader",
+                            text = "PDF Book Reader",
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
@@ -163,7 +163,7 @@ fun LibraryScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { viewModel.onSearchQueryChanged(it) },
-                    placeholder = { Text("Search your Kindle library...") },
+                    placeholder = { Text("Search your book library...") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = AmberPrimary) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -285,7 +285,7 @@ fun LibraryScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Generating Kindle cover thumbnail",
+                                text = "Generating cover thumbnail",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
@@ -471,7 +471,7 @@ fun HeroWelcomeBanner(
                     )
                 )
                 Text(
-                    text = "Experience PDFs with Kindle-style page turning & eye-soothing sepia/night themes.",
+                    text = "Experience PDFs with realistic page turning & eye-soothing sepia/night themes.",
                     style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.9f))
                 )
             }
@@ -628,13 +628,13 @@ fun EmptyLibraryState(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = if (isSearch) "No matching books found" else "Your Kindle Shelf is Empty",
+            text = if (isSearch) "No matching books found" else "Your Bookshelf is Empty",
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = if (isSearch) "Try a different search term or check another filter tab."
-            else "Import any PDF file from your phone storage or drive to start reading in Kindle book mode.",
+            else "Import any PDF file from your phone storage or drive to start reading in cozy book mode.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
             modifier = Modifier.padding(horizontal = 16.dp)

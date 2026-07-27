@@ -2,7 +2,7 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Kindle Warm Reading Palette
+// Warm Reading Palette
 val AmberPrimary = Color(0xFFD97706)
 val AmberSecondary = Color(0xFFB45309)
 val WarmCharcoal = Color(0xFF1D1B18)

@@ -82,7 +82,7 @@ class BookRepository(private val bookDao: BookDao) {
         val coversDir = File(context.filesDir, "covers").apply { mkdirs() }
 
         val sampleMeta = listOf(
-            Triple("The Kindle Experience Guide", "Kindle Editorial Team", "A 5-chapter guide on custom themes, reading stats, and gestures."),
+            Triple("The Digital Reader Guide", "Editorial Team", "A 5-chapter guide on custom themes, reading stats, and gestures."),
             Triple("A Scandal in Bohemia", "Arthur Conan Doyle", "Classic Sherlock Holmes mystery story formatted for digital reading."),
             Triple("The Art of Mindful Reading", "Dr. Elena Vance", "An essay on cognitive focus and screen reading comfort.")
         )

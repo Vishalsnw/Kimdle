@@ -38,7 +38,7 @@ private val LightColorScheme =
 @Composable
 fun MyApplicationTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
-  dynamicColor: Boolean = false, // Disable dynamic color so our cozy Kindle amber/sepia palette is always preserved!
+  dynamicColor: Boolean = false, // Disable dynamic color so our cozy amber/sepia palette is always preserved!
   content: @Composable () -> Unit,
 ) {
   val colorScheme =

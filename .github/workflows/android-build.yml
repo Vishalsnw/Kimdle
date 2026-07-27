@@ -51,7 +51,7 @@ jobs:
         if: success()
         continue-on-error: true
         with:
-          name: kindle-pdf-reader-debug-apk
+          name: pdf-reader-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 3
           overwrite: true
@@ -62,13 +62,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Preparing APK for GitHub Release..."
-          cp app/build/outputs/apk/debug/*.apk Kindle-PDF-Reader-Latest.apk
+          cp app/build/outputs/apk/debug/*.apk PDF-Reader-Latest.apk
           
           echo "Deleting previous automated release tag if existing..."
           gh release delete latest-build --cleanup-tag --yes || true
           
           echo "Creating new GitHub Release with APK asset..."
-          gh release create latest-build Kindle-PDF-Reader-Latest.apk \
-            --title "📱 Latest Kindle PDF Reader Build (APK)" \
-            --notes "Automated build from branch \`${{ github.ref_name }}\` (Commit: \`${{ github.sha }}\`).<br><br>📥 **How to install:** Click \`Kindle-PDF-Reader-Latest.apk\` below to download and install on your Android device." \
+          gh release create latest-build PDF-Reader-Latest.apk \
+            --title "📱 Latest PDF Reader Build (APK)" \
+            --notes "Automated build from branch \`${{ github.ref_name }}\` (Commit: \`${{ github.sha }}\`).<br><br>📥 **How to install:** Click \`PDF-Reader-Latest.apk\` below to download and install on your Android device." \
             --latest

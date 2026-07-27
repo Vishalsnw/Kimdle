@@ -19,14 +19,14 @@ object SampleBookGenerator {
             samplesDir.mkdirs()
         }
 
-        val book1 = File(samplesDir, "kindle_experience_guide.pdf")
+        val book1 = File(samplesDir, "digital_reader_guide.pdf")
         val book2 = File(samplesDir, "sherlock_holmes_scandal.pdf")
         val book3 = File(samplesDir, "art_of_mindful_reading.pdf")
 
         val generated = mutableListOf<File>()
 
         if (!book1.exists()) {
-            createKindleGuidePdf(book1)
+            createReaderGuidePdf(book1)
             generated.add(book1)
         } else {
             generated.add(book1)
@@ -49,7 +49,7 @@ object SampleBookGenerator {
         generated
     }
 
-    private fun createKindleGuidePdf(destFile: File) {
+    private fun createReaderGuidePdf(destFile: File) {
         val document = PdfDocument()
         val pageWidth = 595
         val pageHeight = 842 // Standard A4 points
@@ -90,8 +90,8 @@ object SampleBookGenerator {
         }
 
         val chapters = listOf(
-            "Welcome to the Kindle PDF Reader" to listOf(
-                "Thank you for choosing our Kindle-style PDF Reader! This application transforms ordinary PDF files into an immersive, comfortable digital book experience.",
+            "Welcome to the Digital PDF Reader" to listOf(
+                "Thank you for choosing our digital PDF Reader! This application transforms ordinary PDF files into an immersive, comfortable book reading experience.",
                 "With our custom rendering engine, every PDF page is processed with high-fidelity bitmap scaling and instant caching, ensuring smooth horizontal page flips just like turning pages in a physical paper book.",
                 "Notice the generous margins and crisp typography on this page. You can customize the look of this page at any time using our Reading Themes: Light Mode, Sepia Mode, and Night Mode."
             ),
@@ -162,7 +162,7 @@ object SampleBookGenerator {
             }
 
             // Draw Footer
-            canvas.drawText("Page $pageNum • Kindle PDF Reader", 50f, pageHeight - 40f, footerPaint)
+            canvas.drawText("Page $pageNum • Digital PDF Reader", 50f, pageHeight - 40f, footerPaint)
             document.finishPage(page)
             pageNum++
         }

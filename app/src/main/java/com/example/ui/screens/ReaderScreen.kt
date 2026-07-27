@@ -225,7 +225,7 @@ fun ReaderScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = AmberPrimary, modifier = Modifier.size(48.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Opening Kindle Book...", style = MaterialTheme.typography.bodyMedium, color = currentThemeText.copy(alpha = 0.7f))
+                    Text("Opening Book...", style = MaterialTheme.typography.bodyMedium, color = currentThemeText.copy(alpha = 0.7f))
                 }
             }
         } else {
@@ -250,14 +250,14 @@ fun ReaderScreen(
                 }
             }
 
-            if (settings.readingMode == ReadingMode.KINDLE_REFLOW || settings.transitionStyle == TransitionStyle.HORIZONTAL_FLIP) {
-                // Horizontal Kindle Page Flip & Reflow Mode
+            if (settings.readingMode == ReadingMode.SMART_REFLOW || settings.transitionStyle == TransitionStyle.HORIZONTAL_FLIP) {
+                // Horizontal Page Flip & Reflow Mode
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier
                         .fillMaxSize()
                         .pointerInput(settings.readingMode) {
-                            if (settings.readingMode != ReadingMode.KINDLE_REFLOW) {
+                            if (settings.readingMode != ReadingMode.SMART_REFLOW) {
                                 detectTapGestures { offset ->
                                     val width = size.width
                                     when {
@@ -269,7 +269,7 @@ fun ReaderScreen(
                             }
                         }
                 ) { pageIndex ->
-                    KindlePageContent(
+                    ReaderPageContent(
                         pageIndex = pageIndex,
                         settings = settings,
                         widthPx = screenWidthPx,
@@ -308,7 +308,7 @@ fun ReaderScreen(
                                 .fillMaxWidth()
                                 .height(configuration.screenHeightDp.dp)
                         ) {
-                            KindlePageContent(
+                            ReaderPageContent(
                                 pageIndex = pageIndex,
                                 settings = settings,
                                 widthPx = screenWidthPx,
@@ -364,15 +364,15 @@ fun ReaderScreen(
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                         )
                         Row {
-                            // Kindle Smart Reflow Toggle Button
+                            // Smart Reflow Toggle Button
                             IconButton(onClick = {
-                                val newMode = if (settings.readingMode == ReadingMode.KINDLE_REFLOW) ReadingMode.ORIGINAL_LAYOUT else ReadingMode.KINDLE_REFLOW
+                                val newMode = if (settings.readingMode == ReadingMode.SMART_REFLOW) ReadingMode.ORIGINAL_LAYOUT else ReadingMode.SMART_REFLOW
                                 viewModel.updateReadingMode(newMode)
                             }) {
                                 Icon(
-                                    imageVector = if (settings.readingMode == ReadingMode.KINDLE_REFLOW) Icons.Default.TextFields else Icons.Default.Image,
-                                    contentDescription = "Toggle Kindle Reflow Mode",
-                                    tint = if (settings.readingMode == ReadingMode.KINDLE_REFLOW) AmberPrimary else MaterialTheme.colorScheme.onSurface
+                                    imageVector = if (settings.readingMode == ReadingMode.SMART_REFLOW) Icons.Default.TextFields else Icons.Default.Image,
+                                    contentDescription = "Toggle Smart Reflow Mode",
+                                    tint = if (settings.readingMode == ReadingMode.SMART_REFLOW) AmberPrimary else MaterialTheme.colorScheme.onSurface
                                 )
                             }
                             // Bookmark Button
@@ -464,7 +464,7 @@ fun ReaderScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val pageDisplay = if (settings.readingMode == ReadingMode.KINDLE_REFLOW && totalSubPages > 1) {
+                            val pageDisplay = if (settings.readingMode == ReadingMode.SMART_REFLOW && totalSubPages > 1) {
                                 "Page ${currentPageIndex + 1} (${currentSubPage + 1}/$totalSubPages)"
                             } else {
                                 "Page ${currentPageIndex + 1} of $totalPages"
@@ -491,7 +491,7 @@ fun ReaderScreen(
                 }
             }
 
-            // Persistent subtle Kindle Reading Status Footer when overlay is hidden
+            // Persistent reading status footer when overlay is hidden
             if (!isOverlayVisible) {
                 Row(
                     modifier = Modifier
@@ -502,7 +502,7 @@ fun ReaderScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val pageStr = if (settings.readingMode == ReadingMode.KINDLE_REFLOW && totalSubPages > 1) {
+                    val pageStr = if (settings.readingMode == ReadingMode.SMART_REFLOW && totalSubPages > 1) {
                         "Page ${currentPageIndex + 1} (${currentSubPage + 1}/$totalSubPages)"
                     } else {
                         "Page ${currentPageIndex + 1} of $totalPages"
@@ -514,7 +514,7 @@ fun ReaderScreen(
                     )
                     val progressPercent = if (totalPages > 0) ((currentPageIndex + 1) * 100) / totalPages else 0
                     Text(
-                        text = "$progressPercent% Read • Kindle",
+                        text = "$progressPercent% Read",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
                         color = currentThemeText.copy(alpha = 0.5f)
                     )
@@ -658,23 +658,23 @@ fun ReaderScreen(
                     .navigationBarsPadding()
             ) {
                 Text(
-                    text = "Kindle Reading Settings",
+                    text = "Reading Settings",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // Reading Mode Section (Kindle Text Reflow vs Original PDF)
-                Text(text = "Reading Mode (Kindle Smart Fit)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                // Reading Mode Section
+                Text(text = "Reading Mode (Smart Text Fit)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     TransitionStyleCard(
-                        title = "📖 Kindle Reflow",
+                        title = "📖 Smart Reflow",
                         subtitle = "Auto-wraps to screen width",
-                        selected = settings.readingMode == ReadingMode.KINDLE_REFLOW,
-                        onClick = { viewModel.updateReadingMode(ReadingMode.KINDLE_REFLOW) },
+                        selected = settings.readingMode == ReadingMode.SMART_REFLOW,
+                        onClick = { viewModel.updateReadingMode(ReadingMode.SMART_REFLOW) },
                         modifier = Modifier.weight(1f)
                     )
                     TransitionStyleCard(
@@ -686,9 +686,9 @@ fun ReaderScreen(
                     )
                 }
 
-                if (settings.readingMode == ReadingMode.KINDLE_REFLOW) {
+                if (settings.readingMode == ReadingMode.SMART_REFLOW) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(text = "Kindle Font Size", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(text = "Font Size", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -766,7 +766,7 @@ fun ReaderScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     TransitionStyleCard(
-                        title = "Kindle Page Flip",
+                        title = "Realistic Page Flip",
                         subtitle = "Horizontal swiping",
                         selected = settings.transitionStyle == TransitionStyle.HORIZONTAL_FLIP,
                         onClick = { viewModel.updateTransitionStyle(TransitionStyle.HORIZONTAL_FLIP) },
@@ -809,7 +809,7 @@ fun ReaderScreen(
 }
 
 private fun chunkTextIntoPages(text: String, linesPerPage: Int, charsPerLine: Int): List<String> {
-    if (text.isEmpty()) return emptyList()
+    if (text.isEmpty()) return listOf("")
     
     val pages = mutableListOf<String>()
     val paragraphs = text.split("\n")
@@ -897,7 +897,7 @@ private fun chunkTextIntoPages(text: String, linesPerPage: Int, charsPerLine: In
 }
 
 @Composable
-fun KindlePageContent(
+fun ReaderPageContent(
     pageIndex: Int,
     settings: com.example.data.model.ReaderSettings,
     widthPx: Int,
@@ -910,8 +910,8 @@ fun KindlePageContent(
     onToggleOverlay: () -> Unit = {},
     onSubPageChanged: (Int, Int) -> Unit = { _, _ -> }
 ) {
-    if (settings.readingMode == ReadingMode.KINDLE_REFLOW) {
-        KindleReflowPageItem(
+    if (settings.readingMode == ReadingMode.SMART_REFLOW) {
+        ReflowPageItem(
             pageIndex = pageIndex,
             settings = settings,
             colorFilter = colorFilter,
@@ -942,7 +942,7 @@ fun KindlePageContent(
 }
 
 @Composable
-fun KindleReflowPageItem(
+fun ReflowPageItem(
     pageIndex: Int,
     settings: com.example.data.model.ReaderSettings,
     colorFilter: ColorFilter?,
@@ -967,8 +967,8 @@ fun KindleReflowPageItem(
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = AmberPrimary, modifier = Modifier.size(36.dp))
         }
-    } else if (content.text.isEmpty() && content.images.isEmpty()) {
-        // Scanned image PDF without selectable text -> Fallback to image with auto-width fit!
+    } else if (content.images.isEmpty() && content.text.trim().length < 120) {
+        // Scanned page, diagram, or complex layout without selectable text -> Fallback to original image!
         PdfPageItem(
             pageIndex = pageIndex,
             widthPx = widthPx,
@@ -983,7 +983,7 @@ fun KindleReflowPageItem(
             onSubPageChanged = onSubPageChanged
         )
     } else {
-        // Kindle Smart Text Reflow & Inline Images Reading Mode!
+        // Smart Text Reflow & Inline Images Reading Mode!
         val textColor = when (settings.theme) {
             com.example.data.model.ReaderTheme.LIGHT -> Color.Black
             com.example.data.model.ReaderTheme.SEPIA -> SepiaPageText

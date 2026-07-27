@@ -22,7 +22,7 @@ class PdfRendererHelper(private val filePath: String) {
     private var pdDocument: com.tom_roush.pdfbox.pdmodel.PDDocument? = null
     private var totalPagesCount: Int = 0
 
-    // Memory cache for up to 12 rendered page bitmaps for ultra-smooth Kindle page turning
+    // Memory cache for up to 12 rendered page bitmaps for ultra-smooth page turning
     private val pageCache = LruCache<Int, Bitmap>(12)
     // Cache for extracted text and images for instant reflow reading
     private val reflowCache = LruCache<Int, ReflowPageContent>(20)
@@ -93,24 +93,9 @@ class PdfRendererHelper(private val filePath: String) {
                 val doc = pdDocument ?: return@withContext null
                 val page = doc.getPage(pageIndex)
 
-                // Extract images from page resources
+                // Extract images from page resources including Form XObjects recursively
                 val images = mutableListOf<Bitmap>()
-                val resources = page.resources
-                if (resources != null) {
-                    for (name in resources.xObjectNames) {
-                        try {
-                            val xobject = resources.getXObject(name)
-                            if (xobject is com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject) {
-                                val bmp = xobject.image
-                                if (bmp != null && bmp.width > 50 && bmp.height > 50) {
-                                    images.add(bmp)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                }
+                extractImagesRecursive(page.resources, images)
 
                 val stripper = com.tom_roush.pdfbox.text.PDFTextStripper()
                 stripper.startPage = pageIndex + 1
@@ -124,6 +109,41 @@ class PdfRendererHelper(private val filePath: String) {
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    private fun extractImagesRecursive(
+        resources: com.tom_roush.pdfbox.pdmodel.PDResources?,
+        images: MutableList<Bitmap>,
+        visited: MutableSet<String> = mutableSetOf(),
+        depth: Int = 0
+    ) {
+        if (resources == null || depth > 10) return
+        try {
+            for (name in resources.xObjectNames) {
+                try {
+                    val xobject = resources.getXObject(name)
+                    val objKey = xobject?.cosObject?.hashCode()?.toString() ?: name.name
+                    if (!visited.add(objKey)) continue
+
+                    if (xobject is com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject) {
+                        try {
+                            val bmp = xobject.image
+                            if (bmp != null && bmp.width > 10 && bmp.height > 10) {
+                                images.add(bmp)
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    } else if (xobject is com.tom_roush.pdfbox.pdmodel.graphics.form.PDFormXObject) {
+                        extractImagesRecursive(xobject.resources, images, visited, depth + 1)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
