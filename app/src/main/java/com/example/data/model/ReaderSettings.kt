@@ -25,5 +25,7 @@ data class ReaderSettings(
     val readingMode: ReadingMode = ReadingMode.SMART_REFLOW,
     val bionicReading: Boolean = false,
     val fontSize: Int = 18,
-    val lineHeight: Float = 1.5f
+    val lineHeight: Float = 1.5f,
+    val volumeKeyNavigation: Boolean = true,
+    val autoScrollSpeed: Int = 5
 )

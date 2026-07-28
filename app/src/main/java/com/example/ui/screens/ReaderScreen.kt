@@ -13,6 +13,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.example.ui.viewmodel.VolumeNavDirection
+import kotlinx.coroutines.isActive
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -162,6 +167,8 @@ fun ReaderScreen(
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
     val isTtsPlaying by viewModel.isTtsPlaying.collectAsStateWithLifecycle()
     val isRsvpPlaying by viewModel.isRsvpPlaying.collectAsStateWithLifecycle()
+    val isAutoScrollActive by viewModel.isAutoScrollActive.collectAsStateWithLifecycle()
+    val autoScrollSpeed by viewModel.autoScrollSpeed.collectAsStateWithLifecycle()
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showBookmarksSheet by remember { mutableStateOf(false) }
@@ -175,6 +182,7 @@ fun ReaderScreen(
     var bookmarkFilterColor by remember { mutableStateOf("ALL") }
     var showAudiobookBar by remember { mutableStateOf(false) }
     var showRsvpBar by remember { mutableStateOf(false) }
+    var volumeKeyFeedbackText by remember { mutableStateOf<String?>(null) }
     var currentSubPage by remember { mutableIntStateOf(0) }
     var totalSubPages by remember { mutableIntStateOf(1) }
 
@@ -185,7 +193,9 @@ fun ReaderScreen(
     }
 
     BackHandler {
-        if (showRsvpBar || isRsvpPlaying) {
+        if (isAutoScrollActive) {
+            viewModel.stopAutoScroll()
+        } else if (showRsvpBar || isRsvpPlaying) {
             viewModel.stopRsvp()
             showRsvpBar = false
         } else if (showAudiobookBar || isTtsPlaying) {
@@ -243,6 +253,7 @@ fun ReaderScreen(
 
     val totalPages = book?.totalPages ?: 1
     val pagerState = rememberPagerState(initialPage = currentPageIndex) { totalPages }
+    val lazyListState = rememberLazyListState(initialFirstVisibleItemIndex = currentPageIndex)
 
     var previousPageIndex by remember { mutableIntStateOf(currentPageIndex) }
     val isMovingBackwards = remember(currentPageIndex, previousPageIndex) {
@@ -257,10 +268,81 @@ fun ReaderScreen(
         if (pagerState.currentPage != currentPageIndex && currentPageIndex < totalPages) {
             pagerState.scrollToPage(currentPageIndex)
         }
+        if (!lazyListState.isScrollInProgress && lazyListState.firstVisibleItemIndex != currentPageIndex && currentPageIndex < totalPages) {
+            lazyListState.scrollToItem(currentPageIndex)
+        }
     }
 
     LaunchedEffect(pagerState.currentPage) {
         viewModel.onPageChanged(pagerState.currentPage)
+    }
+
+    LaunchedEffect(lazyListState.firstVisibleItemIndex) {
+        if (settings.transitionStyle == TransitionStyle.VERTICAL_SCROLL && settings.readingMode != ReadingMode.SMART_REFLOW) {
+            viewModel.onPageChanged(lazyListState.firstVisibleItemIndex)
+        }
+    }
+
+    // Hands-Free Auto-Scroll Loop
+    LaunchedEffect(isAutoScrollActive, autoScrollSpeed, settings.transitionStyle, settings.readingMode) {
+        if (isAutoScrollActive) {
+            if (settings.transitionStyle == TransitionStyle.VERTICAL_SCROLL && settings.readingMode != ReadingMode.SMART_REFLOW) {
+                while (isActive && isAutoScrollActive) {
+                    val scrollPx = autoScrollSpeed * 1.5f
+                    lazyListState.scrollBy(scrollPx)
+                    kotlinx.coroutines.delay(16)
+                }
+            } else {
+                while (isActive && isAutoScrollActive) {
+                    val delayMs = ((11 - autoScrollSpeed) * 1000L).coerceAtLeast(1200L)
+                    kotlinx.coroutines.delay(delayMs)
+                    if (isAutoScrollActive && pagerState.currentPage < totalPages - 1) {
+                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                    } else if (pagerState.currentPage >= totalPages - 1) {
+                        viewModel.stopAutoScroll()
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    // Volume Hardware Key Event Listener
+    LaunchedEffect(Unit) {
+        viewModel.volumeNavEvent.collect { direction ->
+            val isVertical = (settings.transitionStyle == TransitionStyle.VERTICAL_SCROLL && settings.readingMode != ReadingMode.SMART_REFLOW)
+            when (direction) {
+                VolumeNavDirection.NEXT -> {
+                    if (isVertical) {
+                        val nextItem = (lazyListState.firstVisibleItemIndex + 1).coerceAtMost(totalPages - 1)
+                        lazyListState.animateScrollToItem(nextItem)
+                    } else {
+                        if (pagerState.currentPage < totalPages - 1) {
+                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                        }
+                    }
+                    volumeKeyFeedbackText = "Vol Down ➔ Page ${currentPageIndex + 2} / $totalPages"
+                }
+                VolumeNavDirection.PREVIOUS -> {
+                    if (isVertical) {
+                        val prevItem = (lazyListState.firstVisibleItemIndex - 1).coerceAtLeast(0)
+                        lazyListState.animateScrollToItem(prevItem)
+                    } else {
+                        if (pagerState.currentPage > 0) {
+                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                        }
+                    }
+                    volumeKeyFeedbackText = "Vol Up ➔ Page ${currentPageIndex} / $totalPages"
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(volumeKeyFeedbackText) {
+        if (volumeKeyFeedbackText != null) {
+            kotlinx.coroutines.delay(1600)
+            volumeKeyFeedbackText = null
+        }
     }
 
     Box(
@@ -339,6 +421,7 @@ fun ReaderScreen(
             } else {
                 // Vertical Continuous Scroll Mode
                 LazyColumn(
+                    state = lazyListState,
                     modifier = Modifier
                         .fillMaxSize()
                         .pointerInput(Unit) {
@@ -412,6 +495,28 @@ fun ReaderScreen(
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                         )
                         Row {
+                            // Hands-Free Auto-Scroll Button
+                            IconButton(onClick = {
+                                if (isAutoScrollActive) {
+                                    viewModel.stopAutoScroll()
+                                } else {
+                                    if (isTtsPlaying || showAudiobookBar) {
+                                        viewModel.stopTts()
+                                        showAudiobookBar = false
+                                    }
+                                    if (isRsvpPlaying || showRsvpBar) {
+                                        viewModel.stopRsvp()
+                                        showRsvpBar = false
+                                    }
+                                    viewModel.startAutoScroll()
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.SwapVert,
+                                    contentDescription = "Hands-Free Auto-Scroll",
+                                    tint = if (isAutoScrollActive) AmberPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                             // Speed Reading (RSVP Mode) Button
                             IconButton(onClick = {
                                 if (isRsvpPlaying || showRsvpBar) {
@@ -513,12 +618,198 @@ fun ReaderScreen(
                 }
             }
 
-            // Bottom Overlays Container (Audiobook Player & Navigation Overlay)
+            // Volume Key Feedback Overlay Toast
+            AnimatedVisibility(
+                visible = volumeKeyFeedbackText != null,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 64.dp)
+            ) {
+                Surface(
+                    color = AmberPrimary,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(20.dp),
+                    shadowElevation = 8.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VolumeUp,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = volumeKeyFeedbackText ?: "",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                        )
+                    }
+                }
+            }
+
+            // Bottom Overlays Container (Audiobook Player, Auto-Scroll & Navigation Overlay)
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
             ) {
+                // Hands-Free Auto-Scroll Floating Card
+                AnimatedVisibility(
+                    visible = isAutoScrollActive,
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it })
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                        shadowElevation = 12.dp,
+                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .navigationBarsPadding()
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .background(AmberPrimary.copy(alpha = 0.15f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.SwapVert,
+                                            contentDescription = null,
+                                            tint = AmberPrimary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "Hands-Free Auto-Scroll",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = if (settings.transitionStyle == TransitionStyle.VERTICAL_SCROLL && settings.readingMode != ReadingMode.SMART_REFLOW)
+                                                "Continuous Smooth Scroll • Speed $autoScrollSpeed/10"
+                                            else
+                                                "Page Turn every ${((11 - autoScrollSpeed) * 1.0f).toInt()} sec",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = { viewModel.toggleAutoScroll() },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Pause,
+                                            contentDescription = "Pause",
+                                            tint = AmberPrimary
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.stopAutoScroll() },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Close",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Speed Control Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Slower",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                                IconButton(
+                                    onClick = { viewModel.setAutoScrollSpeed(autoScrollSpeed - 1) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Text("-", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                }
+                                Slider(
+                                    value = autoScrollSpeed.toFloat(),
+                                    onValueChange = { viewModel.setAutoScrollSpeed(it.toInt()) },
+                                    valueRange = 1f..10f,
+                                    steps = 8,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = AmberPrimary,
+                                        activeTrackColor = AmberPrimary
+                                    ),
+                                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
+                                )
+                                IconButton(
+                                    onClick = { viewModel.setAutoScrollSpeed(autoScrollSpeed + 1) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Text("+", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                }
+                                Text(
+                                    text = "Faster",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+
+                            if (settings.volumeKeyNavigation) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Surface(
+                                    color = AmberPrimary.copy(alpha = 0.1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.VolumeUp,
+                                            contentDescription = null,
+                                            tint = AmberPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Hardware Volume Keys Active (Vol Down = Next, Vol Up = Prev)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // RSVP Speed Reading Card
                 AnimatedVisibility(
                     visible = showRsvpBar || isRsvpPlaying,
@@ -1273,6 +1564,59 @@ fun ReaderScreen(
                         onCheckedChange = { viewModel.updateCropMargins(it) },
                         colors = SwitchDefaults.colors(checkedThumbColor = AmberPrimary, checkedTrackColor = AmberPrimary.copy(alpha = 0.3f))
                     )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Hands-Free & Hardware Controls Section
+                Text(text = "Hands-Free & Hardware Navigation", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Volume Buttons Page Turn", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text(text = "Press Vol Down = Next Page, Vol Up = Prev Page", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    }
+                    Switch(
+                        checked = settings.volumeKeyNavigation,
+                        onCheckedChange = { viewModel.updateVolumeKeyNavigation(it) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = AmberPrimary, checkedTrackColor = AmberPrimary.copy(alpha = 0.3f))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Auto-Scroll Speed", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text(text = "Level $autoScrollSpeed (1 = Slowest, 10 = Fastest)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("-", fontWeight = FontWeight.Bold)
+                    Slider(
+                        value = autoScrollSpeed.toFloat(),
+                        onValueChange = { viewModel.setAutoScrollSpeed(it.toInt()) },
+                        valueRange = 1f..10f,
+                        steps = 8,
+                        colors = SliderDefaults.colors(thumbColor = AmberPrimary, activeTrackColor = AmberPrimary),
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                    )
+                    Text("+", fontWeight = FontWeight.Bold)
                 }
 
                 Spacer(modifier = Modifier.height(28.dp))

@@ -1,9 +1,11 @@
 package com.example
 
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -22,6 +24,8 @@ import com.example.ui.viewmodel.ReaderViewModel
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
 class MainActivity : ComponentActivity() {
+  private val readerViewModel: ReaderViewModel by viewModels()
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     try {
@@ -33,18 +37,30 @@ class MainActivity : ComponentActivity() {
     setContent {
       MyApplicationTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-          ReaderAppNavigation()
+          ReaderAppNavigation(readerViewModel)
         }
       }
     }
   }
+
+  override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+    if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+      if (readerViewModel.onVolumeKeyDown()) {
+        return true
+      }
+    } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+      if (readerViewModel.onVolumeKeyUp()) {
+        return true
+      }
+    }
+    return super.onKeyDown(keyCode, event)
+  }
 }
 
 @Composable
-fun ReaderAppNavigation() {
+fun ReaderAppNavigation(readerViewModel: ReaderViewModel = viewModel()) {
   val navController = rememberNavController()
   val libraryViewModel: LibraryViewModel = viewModel()
-  val readerViewModel: ReaderViewModel = viewModel()
 
   NavHost(navController = navController, startDestination = "library") {
     composable("library") {
