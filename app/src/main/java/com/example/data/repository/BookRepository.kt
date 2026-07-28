@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import com.example.data.db.BookDao
 import com.example.data.model.Book
 import com.example.data.model.Bookmark
+import com.example.data.model.DailyReadingStat
 import com.example.pdf.PdfRendererHelper
 import com.example.pdf.SampleBookGenerator
 import kotlinx.coroutines.Dispatchers
@@ -188,6 +189,32 @@ class BookRepository(private val bookDao: BookDao) {
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    // Daily Reading Stats & Habit Tracking
+    val allDailyStats: Flow<List<DailyReadingStat>> = bookDao.getAllDailyStats()
+
+    suspend fun logReadingProgress(pagesAdded: Int = 0, timeMinutesAdded: Int = 0, wordsAdded: Int = 0, rsvpUsed: Boolean = false) = withContext(Dispatchers.IO) {
+        try {
+            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            val todayStr = dateFormat.format(java.util.Date())
+            val existing = bookDao.getDailyStatByDate(todayStr) ?: DailyReadingStat(dateString = todayStr)
+            
+            val calendar = java.util.Calendar.getInstance()
+            val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+            val isNight = hour >= 22 || hour < 4
+
+            val updated = existing.copy(
+                pagesRead = existing.pagesRead + pagesAdded,
+                readingTimeMinutes = existing.readingTimeMinutes + timeMinutesAdded,
+                wordsRead = existing.wordsRead + wordsAdded,
+                rsvpUsed = existing.rsvpUsed || rsvpUsed,
+                nightRead = existing.nightRead || isNight
+            )
+            bookDao.insertOrUpdateDailyStat(updated)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }

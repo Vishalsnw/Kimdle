@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.db.AppDatabase
 import com.example.data.model.Book
+import com.example.data.model.DailyReadingStat
 import com.example.data.repository.BookRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -84,6 +85,18 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun deleteBook(book: Book) {
         viewModelScope.launch {
             repository.deleteBook(book)
+        }
+    }
+
+    val dailyStats: StateFlow<List<DailyReadingStat>> = repository.allDailyStats.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    fun simulateHabitActivity(pages: Int = 10, minutes: Int = 15, words: Int = 3500) {
+        viewModelScope.launch {
+            repository.logReadingProgress(pagesAdded = pages, timeMinutesAdded = minutes, wordsAdded = words, rsvpUsed = true)
         }
     }
 }

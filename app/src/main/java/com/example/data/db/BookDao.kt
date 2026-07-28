@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.example.data.model.Book
 import com.example.data.model.Bookmark
+import com.example.data.model.DailyReadingStat
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -53,4 +54,14 @@ interface BookDao {
 
     @Query("DELETE FROM bookmarks WHERE id = :bookmarkId")
     suspend fun deleteBookmarkById(bookmarkId: Long)
+
+    // Daily Reading Stats queries
+    @Query("SELECT * FROM daily_reading_stats ORDER BY dateString ASC")
+    fun getAllDailyStats(): Flow<List<DailyReadingStat>>
+
+    @Query("SELECT * FROM daily_reading_stats WHERE dateString = :dateString LIMIT 1")
+    suspend fun getDailyStatByDate(dateString: String): DailyReadingStat?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdateDailyStat(stat: DailyReadingStat): Long
 }

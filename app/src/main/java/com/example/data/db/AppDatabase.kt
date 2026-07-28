@@ -6,8 +6,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.data.model.Book
 import com.example.data.model.Bookmark
+import com.example.data.model.DailyReadingStat
 
-@Database(entities = [Book::class, Bookmark::class], version = 1, exportSchema = false)
+@Database(entities = [Book::class, Bookmark::class, DailyReadingStat::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
 

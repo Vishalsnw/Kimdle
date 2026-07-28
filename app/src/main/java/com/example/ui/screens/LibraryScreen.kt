@@ -30,11 +30,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -98,8 +100,10 @@ fun LibraryScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val isImporting by viewModel.isImporting.collectAsStateWithLifecycle()
+    val dailyStats by viewModel.dailyStats.collectAsStateWithLifecycle()
 
     var bookToDelete by remember { mutableStateOf<Book?>(null) }
+    var showStatsSheet by remember { mutableStateOf(false) }
 
     // PDF Picker Launcher
     val pdfPickerLauncher = rememberLauncherForActivityResult(
@@ -135,6 +139,43 @@ fun LibraryScreen(
                         )
                     }
                 },
+                actions = {
+                    val streakDays = remember(dailyStats) { computeStreak(dailyStats) }
+                    Surface(
+                        color = if (streakDays > 0) Color(0xFFFF5722).copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .clickable { showStatsSheet = true }
+                            .padding(end = 8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocalFireDepartment,
+                                contentDescription = "Streak",
+                                tint = if (streakDays > 0) Color(0xFFFF5722) else Color.Gray,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "${streakDays}d",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (streakDays > 0) Color(0xFFD84315) else MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                        }
+                    }
+                    IconButton(onClick = { showStatsSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Assessment,
+                            contentDescription = "Reading Stats & Habit Tracker",
+                            tint = AmberPrimary
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground
@@ -159,6 +200,60 @@ fun LibraryScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
+                // Habit Tracker Compact Banner
+                val streakDays = remember(dailyStats) { computeStreak(dailyStats) }
+                Surface(
+                    color = AmberPrimary.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .clickable { showStatsSheet = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(AmberPrimary.copy(alpha = 0.2f))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocalFireDepartment,
+                                    contentDescription = null,
+                                    tint = if (streakDays > 0) Color(0xFFFF5722) else AmberPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = if (streakDays > 0) "$streakDays Day Reading Streak!" else "Start Your Reading Streak",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text(
+                                    text = "Tap to view daily stats, goals & badges",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.Default.Assessment,
+                            contentDescription = "Open Stats",
+                            tint = AmberPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+
                 // Search Bar
                 OutlinedTextField(
                     value = searchQuery,
@@ -317,6 +412,13 @@ fun LibraryScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    if (showStatsSheet) {
+        StatsHabitSheet(
+            viewModel = viewModel,
+            onClose = { showStatsSheet = false }
         )
     }
 }

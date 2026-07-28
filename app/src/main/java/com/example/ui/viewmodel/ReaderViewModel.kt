@@ -152,6 +152,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             if (book != null) {
                 viewModelScope.launch {
                     repository.updateProgress(book.id, newIndex)
+                    repository.logReadingProgress(pagesAdded = 1, timeMinutesAdded = 1, rsvpUsed = isRsvpActive)
                 }
             }
             if (isTtsActive) {
@@ -445,6 +446,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val words = cleaned.split(" ").filter { it.isNotEmpty() }
         _rsvpWords.value = words
         _rsvpCurrentWordIndex.value = if (startFromBeginning) 0 else _rsvpCurrentWordIndex.value.coerceIn(0, (words.size - 1).coerceAtLeast(0))
+
+        viewModelScope.launch {
+            repository.logReadingProgress(wordsAdded = words.size, rsvpUsed = true)
+        }
 
         if (isRsvpActive && _isRsvpPlaying.value) {
             startRsvpLoop()
