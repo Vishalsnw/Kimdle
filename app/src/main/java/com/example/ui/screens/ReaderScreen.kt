@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.padding
@@ -169,6 +170,8 @@ fun ReaderScreen(
     var bookmarkNoteText by remember { mutableStateOf("") }
     var selectedHighlightColor by remember { mutableStateOf("Yellow") }
     var highlightTextSnippet by remember { mutableStateOf("") }
+    var pageSentencesList by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedSentencesSet by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var bookmarkFilterColor by remember { mutableStateOf("ALL") }
     var showAudiobookBar by remember { mutableStateOf(false) }
     var showRsvpBar by remember { mutableStateOf(false) }
@@ -469,11 +472,23 @@ fun ReaderScreen(
                                     selectedHighlightColor = "Yellow"
                                     scope.launch {
                                         val text = viewModel.getPageText(currentPageIndex)
-                                        highlightTextSnippet = if (!text.isNullOrBlank()) {
-                                            val clean = text.trim().replace(Regex("\\s+"), " ")
-                                            if (clean.length > 250) clean.take(250) + "..." else clean
+                                        if (!text.isNullOrBlank()) {
+                                            val sentences = text.trim()
+                                                .split(Regex("(?<=[.!?])\\s+|\\n+"))
+                                                .map { it.trim() }
+                                                .filter { it.length > 3 }
+                                            pageSentencesList = sentences
+                                            if (sentences.isNotEmpty()) {
+                                                selectedSentencesSet = setOf(0)
+                                                highlightTextSnippet = sentences.first()
+                                            } else {
+                                                selectedSentencesSet = emptySet()
+                                                highlightTextSnippet = text.take(200)
+                                            }
                                         } else {
-                                            ""
+                                            pageSentencesList = emptyList()
+                                            selectedSentencesSet = emptySet()
+                                            highlightTextSnippet = ""
                                         }
                                         showAddBookmarkDialog = true
                                     }
@@ -714,7 +729,74 @@ fun ReaderScreen(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (pageSentencesList.isNotEmpty()) {
+                        Text(
+                            text = "TAP LINES TO SELECT / DESELECT:",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 160.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            pageSentencesList.forEachIndexed { idx, sentence ->
+                                val isSelected = selectedSentencesSet.contains(idx)
+                                Surface(
+                                    color = if (isSelected) selectedOpt.color.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(
+                                            width = if (isSelected) 1.5.dp else 0.5.dp,
+                                            color = if (isSelected) selectedOpt.color else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .clickable {
+                                            val newSet = if (isSelected) selectedSentencesSet - idx else selectedSentencesSet + idx
+                                            selectedSentencesSet = newSet
+                                            highlightTextSnippet = newSet.sorted().mapNotNull { pageSentencesList.getOrNull(it) }.joinToString(" ")
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isSelected) selectedOpt.color else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                                        ) {
+                                            if (isSelected) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = Color.Black,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = sentence,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            maxLines = 3,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
 
                     // Quote / Snippet TextField
                     OutlinedTextField(
