@@ -22,16 +22,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
@@ -39,14 +43,21 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,6 +74,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import com.example.util.HighlightColors
+import com.example.util.HighlightColorOption
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
@@ -152,7 +165,11 @@ fun ReaderScreen(
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showBookmarksSheet by remember { mutableStateOf(false) }
     var showAddBookmarkDialog by remember { mutableStateOf(false) }
+    var showExportMarkdownSheet by remember { mutableStateOf(false) }
     var bookmarkNoteText by remember { mutableStateOf("") }
+    var selectedHighlightColor by remember { mutableStateOf("Yellow") }
+    var highlightTextSnippet by remember { mutableStateOf("") }
+    var bookmarkFilterColor by remember { mutableStateOf("ALL") }
     var showAudiobookBar by remember { mutableStateOf(false) }
     var showRsvpBar by remember { mutableStateOf(false) }
     var currentSubPage by remember { mutableIntStateOf(0) }
@@ -449,7 +466,17 @@ fun ReaderScreen(
                                     viewModel.toggleBookmark()
                                 } else {
                                     bookmarkNoteText = ""
-                                    showAddBookmarkDialog = true
+                                    selectedHighlightColor = "Yellow"
+                                    scope.launch {
+                                        val text = viewModel.getPageText(currentPageIndex)
+                                        highlightTextSnippet = if (!text.isNullOrBlank()) {
+                                            val clean = text.trim().replace(Regex("\\s+"), " ")
+                                            if (clean.length > 250) clean.take(250) + "..." else clean
+                                        } else {
+                                            ""
+                                        }
+                                        showAddBookmarkDialog = true
+                                    }
                                 }
                             }) {
                                 Icon(
@@ -626,30 +653,106 @@ fun ReaderScreen(
         }
     }
 
-    // Add Bookmark Dialog
+    // Add / Edit Highlight & Note Dialog
     if (showAddBookmarkDialog) {
         AlertDialog(
             onDismissRequest = { showAddBookmarkDialog = false },
-            title = { Text("Bookmark Page ${currentPageIndex + 1}", fontWeight = FontWeight.Bold) },
+            title = {
+                val currentOpt = HighlightColors.getOption(selectedHighlightColor)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Bookmark,
+                        contentDescription = null,
+                        tint = currentOpt.color
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Highlight & Note (Page ${currentPageIndex + 1})", fontWeight = FontWeight.Bold)
+                }
+            },
             text = {
-                Column {
-                    Text("Add an optional study note or reminder for this page:")
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text("Highlight Category Color:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Color Selection Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        HighlightColors.ALL.forEach { option ->
+                            val isSelected = selectedHighlightColor.equals(option.name, ignoreCase = true)
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(option.color)
+                                    .border(
+                                        width = if (isSelected) 3.dp else 1.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                        shape = CircleShape
+                                    )
+                                    .clickable { selectedHighlightColor = option.name }
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = option.label,
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val selectedOpt = HighlightColors.getOption(selectedHighlightColor)
+                    Text(
+                        text = "${selectedOpt.emoji} ${selectedOpt.name} • ${selectedOpt.label}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Quote / Snippet TextField
+                    OutlinedTextField(
+                        value = highlightTextSnippet,
+                        onValueChange = { highlightTextSnippet = it },
+                        label = { Text("Highlight Excerpt / Quote") },
+                        placeholder = { Text("Selected book passage or sentence...") },
+                        leadingIcon = { Icon(Icons.Default.FormatQuote, contentDescription = null, tint = selectedOpt.color) },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 4
+                    )
+
                     Spacer(modifier = Modifier.height(12.dp))
+
+                    // Study Note TextField
                     OutlinedTextField(
                         value = bookmarkNoteText,
                         onValueChange = { bookmarkNoteText = it },
-                        placeholder = { Text("e.g., Important quote about reading rituals...") },
+                        label = { Text("Personal Study Note (Optional)") },
+                        placeholder = { Text("Key insight, thought or study reminder...") },
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 4
                     )
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.toggleBookmark(bookmarkNoteText)
-                    showAddBookmarkDialog = false
-                }) {
-                    Text("Save Bookmark", color = AmberPrimary, fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = {
+                        viewModel.toggleBookmark(
+                            note = bookmarkNoteText,
+                            color = selectedHighlightColor,
+                            selectedText = highlightTextSnippet
+                        )
+                        showAddBookmarkDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AmberPrimary, contentColor = Color.White)
+                ) {
+                    Text("Save Highlight", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -660,7 +763,7 @@ fun ReaderScreen(
         )
     }
 
-    // Bookmarks Bottom Sheet
+    // Bookmarks & Multi-Color Highlights Sheet
     if (showBookmarksSheet) {
         ModalBottomSheet(
             onDismissRequest = { showBookmarksSheet = false },
@@ -672,15 +775,98 @@ fun ReaderScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .navigationBarsPadding()
             ) {
-                Text(
-                    text = "Bookmarks & Notes",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
+                // Header Row with Export Markdown Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Bookmarks & Highlights",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "${bookmarks.size} total saved annotations",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+
+                    if (bookmarks.isNotEmpty()) {
+                        Button(
+                            onClick = { showExportMarkdownSheet = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = AmberPrimary, contentColor = Color.White),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Description,
+                                contentDescription = "Export Markdown",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Export .md", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Color Filter Chips Row
+                if (bookmarks.isNotEmpty()) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = bookmarkFilterColor == "ALL",
+                                onClick = { bookmarkFilterColor = "ALL" },
+                                label = { Text("All (${bookmarks.size})") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = AmberPrimary.copy(alpha = 0.2f),
+                                    selectedLabelColor = AmberPrimary
+                                )
+                            )
+                        }
+                        items(HighlightColors.ALL) { colorOpt ->
+                            val count = bookmarks.count { it.highlightColor.equals(colorOpt.name, ignoreCase = true) }
+                            if (count > 0) {
+                                FilterChip(
+                                    selected = bookmarkFilterColor.equals(colorOpt.name, ignoreCase = true),
+                                    onClick = { bookmarkFilterColor = colorOpt.name },
+                                    label = { Text("${colorOpt.emoji} ${colorOpt.name} ($count)") },
+                                    leadingIcon = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .clip(CircleShape)
+                                                .background(colorOpt.color)
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = colorOpt.color.copy(alpha = 0.25f),
+                                        selectedLabelColor = Color.Black
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (bookmarks.isEmpty()) {
+                val filteredBookmarks = remember(bookmarks, bookmarkFilterColor) {
+                    if (bookmarkFilterColor == "ALL") {
+                        bookmarks
+                    } else {
+                        bookmarks.filter { it.highlightColor.equals(bookmarkFilterColor, ignoreCase = true) }
+                    }
+                }
+
+                if (filteredBookmarks.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -688,7 +874,10 @@ fun ReaderScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No bookmarks added yet. Tap the bookmark ribbon while reading to mark a page.",
+                            text = if (bookmarks.isEmpty())
+                                "No bookmarks added yet. Tap the bookmark ribbon while reading to mark a page or sentence."
+                            else
+                                "No highlights found for this color category.",
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
@@ -696,10 +885,11 @@ fun ReaderScreen(
                     }
                 } else {
                     LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(300.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth().height(360.dp)
                     ) {
-                        items(bookmarks, key = { it.id }) { bm ->
+                        items(filteredBookmarks, key = { it.id }) { bm ->
+                            val colorOpt = HighlightColors.getOption(bm.highlightColor)
                             Card(
                                 shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -711,32 +901,78 @@ fun ReaderScreen(
                                         viewModel.setOverlayVisible(false)
                                     }
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .background(AmberPrimary, CircleShape),
-                                        contentAlignment = Alignment.Center
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = "${bm.pageNumber + 1}",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = "Page ${bm.pageNumber + 1}", fontWeight = FontWeight.Bold)
-                                        if (bm.note.isNotEmpty()) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(colorOpt.color.copy(alpha = 0.3f))
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "${colorOpt.emoji} Page ${bm.pageNumber + 1}",
+                                                    style = MaterialTheme.typography.labelMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.Black
+                                                    )
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = bm.note,
+                                                text = colorOpt.label,
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                             )
                                         }
+
+                                        IconButton(
+                                            onClick = { viewModel.deleteBookmarkById(bm.id) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete Highlight",
+                                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (bm.selectedText.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Surface(
+                                            color = colorOpt.color.copy(alpha = 0.12f),
+                                            shape = RoundedCornerShape(6.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .border(
+                                                    width = 2.dp,
+                                                    color = colorOpt.color,
+                                                    shape = RoundedCornerShape(6.dp)
+                                                )
+                                        ) {
+                                            Text(
+                                                text = "\"${bm.selectedText}\"",
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                                ),
+                                                modifier = Modifier.padding(8.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (bm.note.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = bm.note,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
                                     }
                                 }
                             }
@@ -746,6 +982,15 @@ fun ReaderScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    // Export Markdown Sheet
+    if (showExportMarkdownSheet && book != null) {
+        ExportMarkdownSheet(
+            book = book!!,
+            bookmarks = bookmarks,
+            onClose = { showExportMarkdownSheet = false }
+        )
     }
 
     // Settings Bottom Sheet

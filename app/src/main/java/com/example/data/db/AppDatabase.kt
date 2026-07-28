@@ -8,7 +8,7 @@ import com.example.data.model.Book
 import com.example.data.model.Bookmark
 import com.example.data.model.DailyReadingStat
 
-@Database(entities = [Book::class, Bookmark::class, DailyReadingStat::class], version = 2, exportSchema = false)
+@Database(entities = [Book::class, Bookmark::class, DailyReadingStat::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
 

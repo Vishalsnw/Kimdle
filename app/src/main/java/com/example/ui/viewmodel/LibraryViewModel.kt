@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -98,5 +99,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.logReadingProgress(pagesAdded = pages, timeMinutesAdded = minutes, wordsAdded = words, rsvpUsed = true)
         }
+    }
+
+    suspend fun getBookmarksForBook(bookId: Long): List<com.example.data.model.Bookmark> {
+        return repository.getBookmarks(bookId).first()
     }
 }

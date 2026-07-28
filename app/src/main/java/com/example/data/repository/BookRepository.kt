@@ -52,13 +52,31 @@ class BookRepository(private val bookDao: BookDao) {
     // Bookmark queries
     fun getBookmarks(bookId: Long): Flow<List<Bookmark>> = bookDao.getBookmarksForBook(bookId)
 
-    suspend fun addBookmark(bookId: Long, pageNumber: Int, note: String = ""): Long {
+    suspend fun addBookmark(
+        bookId: Long,
+        pageNumber: Int,
+        note: String = "",
+        highlightColor: String = "Yellow",
+        selectedText: String = ""
+    ): Long {
         val existing = bookDao.getBookmarkForPage(bookId, pageNumber)
         val title = "Page ${pageNumber + 1}"
         val bookmark = if (existing != null) {
-            existing.copy(note = note, timestamp = System.currentTimeMillis())
+            existing.copy(
+                note = note,
+                highlightColor = highlightColor,
+                selectedText = selectedText,
+                timestamp = System.currentTimeMillis()
+            )
         } else {
-            Bookmark(bookId = bookId, pageNumber = pageNumber, pageTitle = title, note = note)
+            Bookmark(
+                bookId = bookId,
+                pageNumber = pageNumber,
+                pageTitle = title,
+                note = note,
+                highlightColor = highlightColor,
+                selectedText = selectedText
+            )
         }
         bookDao.updateBookmarkedStatus(bookId, true)
         return bookDao.insertBookmark(bookmark)
@@ -66,7 +84,14 @@ class BookRepository(private val bookDao: BookDao) {
 
     suspend fun removeBookmark(bookId: Long, pageNumber: Int) {
         bookDao.deleteBookmarkForPage(bookId, pageNumber)
-        // Check if there are any remaining bookmarks for this book
+        val remaining = bookDao.getBookmarksForBook(bookId).first()
+        if (remaining.isEmpty()) {
+            bookDao.updateBookmarkedStatus(bookId, false)
+        }
+    }
+
+    suspend fun deleteBookmarkById(bookId: Long, bookmarkId: Long) {
+        bookDao.deleteBookmarkById(bookmarkId)
         val remaining = bookDao.getBookmarksForBook(bookId).first()
         if (remaining.isEmpty()) {
             bookDao.updateBookmarkedStatus(bookId, false)

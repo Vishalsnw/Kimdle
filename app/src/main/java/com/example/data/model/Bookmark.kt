@@ -23,5 +23,7 @@ data class Bookmark(
     val pageNumber: Int, // 0-indexed page number
     val pageTitle: String = "Page",
     val note: String = "",
+    val highlightColor: String = "Yellow", // Yellow, Green, Blue, Pink, Purple, Orange
+    val selectedText: String = "",
     val timestamp: Long = System.currentTimeMillis()
 )

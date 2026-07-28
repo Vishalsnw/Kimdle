@@ -35,7 +35,9 @@ import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FolderOpen
+import com.example.data.model.Bookmark
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
@@ -63,7 +65,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,6 +108,9 @@ fun LibraryScreen(
 
     var bookToDelete by remember { mutableStateOf<Book?>(null) }
     var showStatsSheet by remember { mutableStateOf(false) }
+    var bookForNotesExport by remember { mutableStateOf<Book?>(null) }
+    var exportNotesList by remember { mutableStateOf<List<Bookmark>>(emptyList()) }
+    val scope = rememberCoroutineScope()
 
     // PDF Picker Launcher
     val pdfPickerLauncher = rememberLauncherForActivityResult(
@@ -342,7 +349,14 @@ fun LibraryScreen(
                             BookCoverCard(
                                 book = book,
                                 onClick = { onBookClick(book.id) },
-                                onDeleteClick = { bookToDelete = book }
+                                onDeleteClick = { bookToDelete = book },
+                                onExportNotesClick = {
+                                    scope.launch {
+                                        val marks = viewModel.getBookmarksForBook(book.id)
+                                        exportNotesList = marks
+                                        bookForNotesExport = book
+                                    }
+                                }
                             )
                         }
                     }
@@ -419,6 +433,14 @@ fun LibraryScreen(
         StatsHabitSheet(
             viewModel = viewModel,
             onClose = { showStatsSheet = false }
+        )
+    }
+
+    bookForNotesExport?.let { book ->
+        ExportMarkdownSheet(
+            book = book,
+            bookmarks = exportNotesList,
+            onClose = { bookForNotesExport = null }
         )
     }
 }
@@ -585,7 +607,8 @@ fun HeroWelcomeBanner(
 fun BookCoverCard(
     book: Book,
     onClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onExportNotesClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -651,21 +674,42 @@ fun BookCoverCard(
                 }
             }
 
-            // Delete button on long press or top right icon
-            IconButton(
-                onClick = onDeleteClick,
+            // Action Buttons Overlay (Delete & Export Notes)
+            Row(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(4.dp)
-                    .size(28.dp)
-                    .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
+                IconButton(
+                    onClick = onDeleteClick,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                if (book.isBookmarked) {
+                    IconButton(
+                        onClick = onExportNotesClick,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(AmberPrimary, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = "Export Notes (.md)",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
 
             // Reading Progress Bar at Bottom of Cover

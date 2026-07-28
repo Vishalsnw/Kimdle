@@ -186,15 +186,32 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         _isOverlayVisible.value = visible
     }
 
-    fun toggleBookmark(note: String = "") {
+    fun toggleBookmark(
+        note: String = "",
+        color: String = "Yellow",
+        selectedText: String = ""
+    ) {
         val book = _currentBook.value ?: return
         val page = _currentPageIndex.value
         viewModelScope.launch {
-            if (_isBookmarked.value) {
+            if (_isBookmarked.value && note.isEmpty() && selectedText.isEmpty()) {
                 repository.removeBookmark(book.id, page)
             } else {
-                repository.addBookmark(book.id, page, note)
+                repository.addBookmark(
+                    bookId = book.id,
+                    pageNumber = page,
+                    note = note,
+                    highlightColor = color,
+                    selectedText = selectedText
+                )
             }
+        }
+    }
+
+    fun deleteBookmarkById(bookmarkId: Long) {
+        val book = _currentBook.value ?: return
+        viewModelScope.launch {
+            repository.deleteBookmarkById(book.id, bookmarkId)
         }
     }
 
