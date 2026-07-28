@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,11 +64,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Image
@@ -104,10 +108,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -140,12 +147,14 @@ fun ReaderScreen(
     val isBookmarked by viewModel.isBookmarked.collectAsStateWithLifecycle()
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
     val isTtsPlaying by viewModel.isTtsPlaying.collectAsStateWithLifecycle()
+    val isRsvpPlaying by viewModel.isRsvpPlaying.collectAsStateWithLifecycle()
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showBookmarksSheet by remember { mutableStateOf(false) }
     var showAddBookmarkDialog by remember { mutableStateOf(false) }
     var bookmarkNoteText by remember { mutableStateOf("") }
     var showAudiobookBar by remember { mutableStateOf(false) }
+    var showRsvpBar by remember { mutableStateOf(false) }
     var currentSubPage by remember { mutableIntStateOf(0) }
     var totalSubPages by remember { mutableIntStateOf(1) }
 
@@ -156,7 +165,10 @@ fun ReaderScreen(
     }
 
     BackHandler {
-        if (showAudiobookBar || isTtsPlaying) {
+        if (showRsvpBar || isRsvpPlaying) {
+            viewModel.stopRsvp()
+            showRsvpBar = false
+        } else if (showAudiobookBar || isTtsPlaying) {
             viewModel.stopTts()
             showAudiobookBar = false
         } else if (isOverlayVisible) {
@@ -380,12 +392,36 @@ fun ReaderScreen(
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                         )
                         Row {
+                            // Speed Reading (RSVP Mode) Button
+                            IconButton(onClick = {
+                                if (isRsvpPlaying || showRsvpBar) {
+                                    viewModel.stopRsvp()
+                                    showRsvpBar = false
+                                } else {
+                                    if (isTtsPlaying || showAudiobookBar) {
+                                        viewModel.stopTts()
+                                        showAudiobookBar = false
+                                    }
+                                    showRsvpBar = true
+                                    viewModel.startRsvp()
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Speed,
+                                    contentDescription = "RSVP Speed Reading Mode",
+                                    tint = if (isRsvpPlaying || showRsvpBar) AmberPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                             // Audiobook Mode Button
                             IconButton(onClick = {
                                 if (isTtsPlaying || showAudiobookBar) {
                                     viewModel.stopTts()
                                     showAudiobookBar = false
                                 } else {
+                                    if (isRsvpPlaying || showRsvpBar) {
+                                        viewModel.stopRsvp()
+                                        showRsvpBar = false
+                                    }
                                     showAudiobookBar = true
                                     viewModel.startTts()
                                 }
@@ -441,6 +477,21 @@ fun ReaderScreen(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
             ) {
+                // RSVP Speed Reading Card
+                AnimatedVisibility(
+                    visible = showRsvpBar || isRsvpPlaying,
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it })
+                ) {
+                    RsvpPlayerCard(
+                        viewModel = viewModel,
+                        onClose = {
+                            viewModel.stopRsvp()
+                            showRsvpBar = false
+                        }
+                    )
+                }
+
                 // Audiobook Player Card
                 AnimatedVisibility(
                     visible = showAudiobookBar || isTtsPlaying,
@@ -762,6 +813,49 @@ fun ReaderScreen(
                             modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                         ) {
                             Text("A+", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Surface(
+                        color = if (settings.bionicReading) AmberPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(12.dp),
+                        border = if (settings.bionicReading) BorderStroke(1.5.dp, AmberPrimary) else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.updateBionicReading(!settings.bionicReading) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "⚡ Bionic Reading Mode",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (settings.bionicReading) AmberPrimary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Bolds initial letters to anchor eye fixation and double reading speed",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                            Switch(
+                                checked = settings.bionicReading,
+                                onCheckedChange = { viewModel.updateBionicReading(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = AmberPrimary,
+                                    checkedTrackColor = AmberPrimary.copy(alpha = 0.3f)
+                                )
+                            )
                         }
                     }
                 }
@@ -1148,17 +1242,26 @@ fun ReflowPageItem(
                 }
 
                 if (chunkText.isNotEmpty()) {
-                    Text(
-                        text = chunkText,
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            fontSize = settings.fontSize.sp,
-                            lineHeight = (settings.fontSize * settings.lineHeight).sp,
-                            color = textColor,
-                            fontWeight = FontWeight.Normal
-                        ),
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (settings.bionicReading) {
+                        BionicText(
+                            text = chunkText,
+                            fontSize = settings.fontSize,
+                            lineHeight = settings.fontSize * settings.lineHeight,
+                            color = textColor
+                        )
+                    } else {
+                        Text(
+                            text = chunkText,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontSize = settings.fontSize.sp,
+                                lineHeight = (settings.fontSize * settings.lineHeight).sp,
+                                color = textColor,
+                                fontWeight = FontWeight.Normal
+                            ),
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }
@@ -1452,6 +1555,245 @@ fun AudiobookPlayerCard(
 
                 // Stop Button
                 IconButton(onClick = { viewModel.stopTts() }) {
+                    Icon(
+                        imageVector = Icons.Default.Stop,
+                        contentDescription = "Stop",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BionicText(
+    text: String,
+    fontSize: Int,
+    lineHeight: Float,
+    color: Color
+) {
+    val annotatedString = remember(text, color) {
+        buildAnnotatedString {
+            val words = text.split(Regex("(?<=\\s)|(?=\\s)"))
+            for (word in words) {
+                if (word.isBlank()) {
+                    append(word)
+                } else {
+                    val len = word.length
+                    val boldLen = when {
+                        len <= 3 -> 1
+                        len <= 5 -> 2
+                        len <= 8 -> 3
+                        else -> len / 2
+                    }
+                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, color = color)) {
+                        append(word.take(boldLen))
+                    }
+                    withStyle(SpanStyle(fontWeight = FontWeight.Normal, color = color.copy(alpha = 0.85f))) {
+                        append(word.drop(boldLen))
+                    }
+                }
+            }
+        }
+    }
+
+    Text(
+        text = annotatedString,
+        style = MaterialTheme.typography.bodyLarge.copy(
+            fontSize = fontSize.sp,
+            lineHeight = lineHeight.sp
+        ),
+        textAlign = TextAlign.Start,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+fun RsvpPlayerCard(
+    viewModel: com.example.ui.viewmodel.ReaderViewModel,
+    onClose: () -> Unit
+) {
+    val isPlaying by viewModel.isRsvpPlaying.collectAsStateWithLifecycle()
+    val words by viewModel.rsvpWords.collectAsStateWithLifecycle()
+    val currentIndex by viewModel.rsvpCurrentWordIndex.collectAsStateWithLifecycle()
+    val wpm by viewModel.rsvpWpm.collectAsStateWithLifecycle()
+
+    val currentWord = if (words.isNotEmpty() && currentIndex in words.indices) {
+        words[currentIndex]
+    } else {
+        "Ready..."
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 8.dp,
+        shadowElevation = 8.dp,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Header Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Speed,
+                        contentDescription = "Speed Reading Mode",
+                        tint = AmberPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "RSVP Speed Reading",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (words.isNotEmpty()) {
+                        Text(
+                            text = "${currentIndex + 1}/${words.size}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
+                    IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close RSVP",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Focal Word Display Box (RSVP Window)
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(2.dp, AmberPrimary.copy(alpha = 0.5f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Focal indicators (subtle top/bottom notches)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxSize().padding(vertical = 4.dp)
+                    ) {
+                        Box(modifier = Modifier.size(width = 2.dp, height = 6.dp).background(AmberPrimary))
+                        Spacer(modifier = Modifier.weight(1f))
+                        Box(modifier = Modifier.size(width = 2.dp, height = 6.dp).background(AmberPrimary))
+                    }
+
+                    // Render current word with Bionic/ORP highlighting
+                    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+                    val annotatedWord = remember(currentWord, onSurfaceColor) {
+                        buildAnnotatedString {
+                            val len = currentWord.length
+                            val pivot = when {
+                                len <= 1 -> 1
+                                len <= 5 -> 2
+                                len <= 9 -> 3
+                                else -> 4
+                            }.coerceAtMost(len)
+
+                            withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, color = AmberPrimary, fontSize = 28.sp)) {
+                                append(currentWord.take(pivot))
+                            }
+                            withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = onSurfaceColor, fontSize = 28.sp)) {
+                                append(currentWord.drop(pivot))
+                            }
+                        }
+                    }
+                    Text(
+                        text = annotatedWord,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // WPM Selector & Controls Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // WPM Speed Selector
+                TextButton(
+                    onClick = {
+                        val nextWpm = when (wpm) {
+                            200 -> 300
+                            300 -> 400
+                            400 -> 500
+                            500 -> 600
+                            600 -> 800
+                            else -> 200
+                        }
+                        viewModel.setRsvpWpm(nextWpm)
+                    }
+                ) {
+                    Text(
+                        text = "${wpm} WPM",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = AmberPrimary
+                    )
+                }
+
+                // Skip Back 10 words
+                IconButton(onClick = { viewModel.skipRsvpPrevious() }) {
+                    Icon(
+                        imageVector = Icons.Default.FastRewind,
+                        contentDescription = "Rewind 10 words",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // Play / Pause Button
+                FloatingActionButton(
+                    onClick = { viewModel.toggleRsvp() },
+                    containerColor = AmberPrimary,
+                    contentColor = Color.White,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play"
+                    )
+                }
+
+                // Skip Forward 10 words
+                IconButton(onClick = { viewModel.skipRsvpNext() }) {
+                    Icon(
+                        imageVector = Icons.Default.FastForward,
+                        contentDescription = "Forward 10 words",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // Stop Button
+                IconButton(onClick = { viewModel.stopRsvp() }) {
                     Icon(
                         imageVector = Icons.Default.Stop,
                         contentDescription = "Stop",

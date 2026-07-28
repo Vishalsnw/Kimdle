@@ -90,11 +90,27 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private val _ttsProgress = MutableStateFlow<Pair<Int, Int>>(0 to 0)
     val ttsProgress: StateFlow<Pair<Int, Int>> = _ttsProgress
 
+    private val _isRsvpPlaying = MutableStateFlow(false)
+    val isRsvpPlaying: StateFlow<Boolean> = _isRsvpPlaying
+
+    private val _rsvpWpm = MutableStateFlow(300)
+    val rsvpWpm: StateFlow<Int> = _rsvpWpm
+
+    private val _rsvpCurrentWordIndex = MutableStateFlow(0)
+    val rsvpCurrentWordIndex: StateFlow<Int> = _rsvpCurrentWordIndex
+
+    private val _rsvpWords = MutableStateFlow<List<String>>(emptyList())
+    val rsvpWords: StateFlow<List<String>> = _rsvpWords
+
+    private var rsvpJob: Job? = null
+    var isRsvpActive = false
+
     fun loadBook(bookId: Long) {
         viewModelScope.launch {
             _isBookLoading.value = true
             _currentBook.value = null
             stopTts()
+            stopRsvp()
             // Close previous renderer if any
             pdfRendererHelper?.close()
 
@@ -149,6 +165,15 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 _currentTtsSentence.value = ""
                 _ttsProgress.value = 0 to 0
             }
+            if (isRsvpActive) {
+                rsvpJob?.cancel()
+                viewModelScope.launch {
+                    loadRsvpWordsAndPlay(newIndex, startFromBeginning = true)
+                }
+            } else {
+                _rsvpWords.value = emptyList()
+                _rsvpCurrentWordIndex.value = 0
+            }
         }
     }
 
@@ -186,6 +211,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateReadingMode(mode: com.example.data.model.ReadingMode) {
         _settings.value = _settings.value.copy(readingMode = mode)
+    }
+
+    fun updateBionicReading(enabled: Boolean) {
+        _settings.value = _settings.value.copy(bionicReading = enabled)
     }
 
     fun updateFontSize(size: Int) {
@@ -389,9 +418,127 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         speakNextSentence()
     }
 
+    private suspend fun loadRsvpWordsAndPlay(pageIndex: Int, startFromBeginning: Boolean) {
+        val content = getReflowContent(pageIndex)
+        val rawText = content?.text?.trim() ?: ""
+        if (rawText.isEmpty()) {
+            _rsvpWords.value = listOf("No", "text", "on", "page", "${pageIndex + 1}.")
+            _rsvpCurrentWordIndex.value = 0
+            if (isRsvpActive && _isRsvpPlaying.value) {
+                kotlinx.coroutines.delay(1500)
+                val book = _currentBook.value
+                if (book != null && pageIndex + 1 < book.totalPages) {
+                    onPageChanged(pageIndex + 1)
+                } else {
+                    stopRsvp()
+                }
+            }
+            return
+        }
+
+        val cleaned = rawText
+            .replace(Regex("(\\w+)-\\r?\\n(\\w+)"), "$1$2")
+            .replace(Regex("\\r?\\n"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+        val words = cleaned.split(" ").filter { it.isNotEmpty() }
+        _rsvpWords.value = words
+        _rsvpCurrentWordIndex.value = if (startFromBeginning) 0 else _rsvpCurrentWordIndex.value.coerceIn(0, (words.size - 1).coerceAtLeast(0))
+
+        if (isRsvpActive && _isRsvpPlaying.value) {
+            startRsvpLoop()
+        }
+    }
+
+    private fun startRsvpLoop() {
+        rsvpJob?.cancel()
+        rsvpJob = viewModelScope.launch {
+            while (_isRsvpPlaying.value && isRsvpActive) {
+                val words = _rsvpWords.value
+                val index = _rsvpCurrentWordIndex.value
+                if (words.isEmpty() || index >= words.size) {
+                    val book = _currentBook.value
+                    val total = book?.totalPages ?: 1
+                    val nextPage = _currentPageIndex.value + 1
+                    if (nextPage < total) {
+                        onPageChanged(nextPage)
+                    } else {
+                        stopRsvp()
+                    }
+                    break
+                }
+
+                val currentWord = words[index]
+                val baseDelayMs = (60000L / _rsvpWpm.value.coerceAtLeast(100))
+                val extraDelay = when {
+                    currentWord.endsWith(".") || currentWord.endsWith("!") || currentWord.endsWith("?") -> baseDelayMs * 2
+                    currentWord.endsWith(",") || currentWord.endsWith(";") || currentWord.endsWith(":") -> baseDelayMs / 2
+                    else -> 0L
+                }
+                kotlinx.coroutines.delay(baseDelayMs + extraDelay)
+                _rsvpCurrentWordIndex.value = index + 1
+            }
+        }
+    }
+
+    fun toggleRsvp() {
+        if (_isRsvpPlaying.value) {
+            pauseRsvp()
+        } else {
+            startRsvp()
+        }
+    }
+
+    fun startRsvp() {
+        _isRsvpPlaying.value = true
+        isRsvpActive = true
+        if (_rsvpWords.value.isEmpty() || _rsvpCurrentWordIndex.value >= _rsvpWords.value.size) {
+            viewModelScope.launch {
+                loadRsvpWordsAndPlay(_currentPageIndex.value, startFromBeginning = true)
+            }
+        } else {
+            startRsvpLoop()
+        }
+    }
+
+    fun pauseRsvp() {
+        _isRsvpPlaying.value = false
+        isRsvpActive = false
+        rsvpJob?.cancel()
+    }
+
+    fun stopRsvp() {
+        _isRsvpPlaying.value = false
+        isRsvpActive = false
+        rsvpJob?.cancel()
+        _rsvpCurrentWordIndex.value = 0
+        _rsvpWords.value = emptyList()
+    }
+
+    fun setRsvpWpm(wpm: Int) {
+        _rsvpWpm.value = wpm.coerceIn(100, 1000)
+    }
+
+    fun skipRsvpPrevious() {
+        if (!isRsvpActive) return
+        val newIndex = (_rsvpCurrentWordIndex.value - 10).coerceAtLeast(0)
+        _rsvpCurrentWordIndex.value = newIndex
+    }
+
+    fun skipRsvpNext() {
+        if (!isRsvpActive) return
+        val words = _rsvpWords.value
+        val newIndex = (_rsvpCurrentWordIndex.value + 10).coerceAtMost(words.size - 1)
+        if (newIndex >= 0) {
+            _rsvpCurrentWordIndex.value = newIndex
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopTts()
+        stopRsvp()
         tts?.shutdown()
         viewModelScope.launch {
             pdfRendererHelper?.close()
