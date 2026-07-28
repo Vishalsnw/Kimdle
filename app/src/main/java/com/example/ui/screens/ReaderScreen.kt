@@ -60,9 +60,18 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Headset
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material.icons.filled.FormatSize
@@ -95,6 +104,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -129,11 +139,13 @@ fun ReaderScreen(
     val currentPageIndex by viewModel.currentPageIndex.collectAsStateWithLifecycle()
     val isBookmarked by viewModel.isBookmarked.collectAsStateWithLifecycle()
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
+    val isTtsPlaying by viewModel.isTtsPlaying.collectAsStateWithLifecycle()
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showBookmarksSheet by remember { mutableStateOf(false) }
     var showAddBookmarkDialog by remember { mutableStateOf(false) }
     var bookmarkNoteText by remember { mutableStateOf("") }
+    var showAudiobookBar by remember { mutableStateOf(false) }
     var currentSubPage by remember { mutableIntStateOf(0) }
     var totalSubPages by remember { mutableIntStateOf(1) }
 
@@ -144,7 +156,10 @@ fun ReaderScreen(
     }
 
     BackHandler {
-        if (isOverlayVisible) {
+        if (showAudiobookBar || isTtsPlaying) {
+            viewModel.stopTts()
+            showAudiobookBar = false
+        } else if (isOverlayVisible) {
             viewModel.setOverlayVisible(false)
         } else {
             onBack()
@@ -365,6 +380,22 @@ fun ReaderScreen(
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                         )
                         Row {
+                            // Audiobook Mode Button
+                            IconButton(onClick = {
+                                if (isTtsPlaying || showAudiobookBar) {
+                                    viewModel.stopTts()
+                                    showAudiobookBar = false
+                                } else {
+                                    showAudiobookBar = true
+                                    viewModel.startTts()
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = if (isTtsPlaying) Icons.Default.VolumeUp else Icons.Default.Headset,
+                                    contentDescription = "Audiobook Mode",
+                                    tint = if (isTtsPlaying || showAudiobookBar) AmberPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                             // Smart Reflow Toggle Button
                             IconButton(onClick = {
                                 val newMode = if (settings.readingMode == ReadingMode.SMART_REFLOW) ReadingMode.ORIGINAL_LAYOUT else ReadingMode.SMART_REFLOW
@@ -404,89 +435,109 @@ fun ReaderScreen(
                 }
             }
 
-            // Bottom Navigation Overlay
-            AnimatedVisibility(
-                visible = isOverlayVisible,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+            // Bottom Overlays Container (Audiobook Player & Navigation Overlay)
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
             ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                    shadowElevation = 12.dp,
+                // Audiobook Player Card
+                AnimatedVisibility(
+                    visible = showAudiobookBar || isTtsPlaying,
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it })
+                ) {
+                    AudiobookPlayerCard(
+                        viewModel = viewModel,
+                        onClose = {
+                            viewModel.stopTts()
+                            showAudiobookBar = false
+                        }
+                    )
+                }
+
+                // Bottom Navigation Overlay
+                AnimatedVisibility(
+                    visible = isOverlayVisible,
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .navigationBarsPadding()
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                        shadowElevation = 12.dp,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Page Slider
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                        Column(
+                            modifier = Modifier
+                                .navigationBarsPadding()
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
                         ) {
-                            Text(
-                                text = "${currentPageIndex + 1}",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                modifier = Modifier.width(36.dp)
-                            )
-                            Slider(
-                                value = currentPageIndex.toFloat(),
-                                onValueChange = { val newPage = it.toInt()
-                                    if (newPage != currentPageIndex && newPage in 0 until totalPages) {
-                                        scope.launch { pagerState.scrollToPage(newPage) }
-                                    }
-                                },
-                                valueRange = 0f..(if (totalPages > 1) (totalPages - 1).toFloat() else 1f),
-                                steps = if (totalPages > 2) totalPages - 2 else 0,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = AmberPrimary,
-                                    activeTrackColor = AmberPrimary
-                                ),
-                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                            )
-                            Text(
-                                text = "$totalPages",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                modifier = Modifier.width(36.dp),
-                                textAlign = TextAlign.End
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // Reading Stats Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val pageDisplay = if (settings.readingMode == ReadingMode.SMART_REFLOW && totalSubPages > 1) {
-                                "Page ${currentPageIndex + 1} (${currentSubPage + 1}/$totalSubPages)"
-                            } else {
-                                "Page ${currentPageIndex + 1} of $totalPages"
+                            // Page Slider
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "${currentPageIndex + 1}",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.width(36.dp)
+                                )
+                                Slider(
+                                    value = currentPageIndex.toFloat(),
+                                    onValueChange = { val newPage = it.toInt()
+                                        if (newPage != currentPageIndex && newPage in 0 until totalPages) {
+                                            scope.launch { pagerState.scrollToPage(newPage) }
+                                        }
+                                    },
+                                    valueRange = 0f..(if (totalPages > 1) (totalPages - 1).toFloat() else 1f),
+                                    steps = if (totalPages > 2) totalPages - 2 else 0,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = AmberPrimary,
+                                        activeTrackColor = AmberPrimary
+                                    ),
+                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                                )
+                                Text(
+                                    text = "$totalPages",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.width(36.dp),
+                                    textAlign = TextAlign.End
+                                )
                             }
-                            Text(
-                                text = pageDisplay,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                            val progressPercent = if (totalPages > 0) ((currentPageIndex + 1) * 100) / totalPages else 0
-                            Text(
-                                text = "$progressPercent% Read",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = AmberPrimary)
-                            )
-                            val remainingPages = totalPages - (currentPageIndex + 1)
-                            val estMinutes = (remainingPages * 1.5).toInt()
-                            Text(
-                                text = if (estMinutes > 0) "~$estMinutes mins left" else "Finished",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Reading Stats Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val pageDisplay = if (settings.readingMode == ReadingMode.SMART_REFLOW && totalSubPages > 1) {
+                                    "Page ${currentPageIndex + 1} (${currentSubPage + 1}/$totalSubPages)"
+                                } else {
+                                    "Page ${currentPageIndex + 1} of $totalPages"
+                                }
+                                Text(
+                                    text = pageDisplay,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                val progressPercent = if (totalPages > 0) ((currentPageIndex + 1) * 100) / totalPages else 0
+                                Text(
+                                    text = "$progressPercent% Read",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = AmberPrimary)
+                                )
+                                val remainingPages = totalPages - (currentPageIndex + 1)
+                                val estMinutes = (remainingPages * 1.5).toInt()
+                                Text(
+                                    text = if (estMinutes > 0) "~$estMinutes mins left" else "Finished",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
                         }
                     }
                 }
@@ -1255,6 +1306,159 @@ fun TransitionStyleCard(
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+fun AudiobookPlayerCard(
+    viewModel: com.example.ui.viewmodel.ReaderViewModel,
+    onClose: () -> Unit
+) {
+    val isPlaying by viewModel.isTtsPlaying.collectAsStateWithLifecycle()
+    val currentSentence by viewModel.currentTtsSentence.collectAsStateWithLifecycle()
+    val progress by viewModel.ttsProgress.collectAsStateWithLifecycle()
+    val speed by viewModel.ttsSpeed.collectAsStateWithLifecycle()
+
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 8.dp,
+        shadowElevation = 8.dp,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // Header Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Headset,
+                        contentDescription = "Audiobook Mode",
+                        tint = AmberPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Offline Audiobook Mode",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (progress.second > 0) {
+                        Text(
+                            text = "${progress.first}/${progress.second}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
+                    IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close Audiobook",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Currently Reading Text Banner
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = if (currentSentence.isNotEmpty()) currentSentence else "Initializing offline voice engine...",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Controls Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Speed Selector Button
+                TextButton(
+                    onClick = {
+                        val nextSpeed = when (speed) {
+                            0.75f -> 1.0f
+                            1.0f -> 1.25f
+                            1.25f -> 1.5f
+                            1.5f -> 2.0f
+                            else -> 0.75f
+                        }
+                        viewModel.setTtsSpeed(nextSpeed)
+                    }
+                ) {
+                    Text(
+                        text = "${speed}x",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = AmberPrimary
+                    )
+                }
+
+                // Previous Sentence
+                IconButton(onClick = { viewModel.skipTtsPreviousSentence() }) {
+                    Icon(
+                        imageVector = Icons.Default.SkipPrevious,
+                        contentDescription = "Previous Sentence",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // Play / Pause Button
+                FloatingActionButton(
+                    onClick = { viewModel.toggleTts() },
+                    containerColor = AmberPrimary,
+                    contentColor = Color.White,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play"
+                    )
+                }
+
+                // Next Sentence
+                IconButton(onClick = { viewModel.skipTtsNextSentence() }) {
+                    Icon(
+                        imageVector = Icons.Default.SkipNext,
+                        contentDescription = "Next Sentence",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // Stop Button
+                IconButton(onClick = { viewModel.stopTts() }) {
+                    Icon(
+                        imageVector = Icons.Default.Stop,
+                        contentDescription = "Stop",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
     }
 }
