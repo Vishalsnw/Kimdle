@@ -119,16 +119,18 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     var isRsvpActive = false
 
     fun loadBook(bookId: Long) {
+        if (_currentBook.value?.id == bookId && !_isBookLoading.value) {
+            return
+        }
         viewModelScope.launch {
             _isBookLoading.value = true
-            _currentBook.value = null
             stopTts()
             stopRsvp()
-            // Close previous renderer if any
-            pdfRendererHelper?.close()
+            stopAutoScroll()
 
             val book = repository.getBookByIdSync(bookId)
             if (book != null) {
+                pdfRendererHelper?.close()
                 pdfRendererHelper = PdfRendererHelper(book.filePath)
                 val total = pdfRendererHelper?.open() ?: 0
                 val updated = if (total > 0 && book.totalPages != total) {

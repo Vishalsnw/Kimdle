@@ -38,6 +38,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.key
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -251,9 +252,13 @@ fun ReaderScreen(
         }
     }
 
-    val totalPages = book?.totalPages ?: 1
-    val pagerState = rememberPagerState(initialPage = currentPageIndex) { totalPages }
-    val lazyListState = rememberLazyListState(initialFirstVisibleItemIndex = currentPageIndex)
+    val totalPages = (book?.totalPages ?: 1).coerceAtLeast(1)
+    val pagerState = key(bookId) {
+        rememberPagerState(initialPage = currentPageIndex) { totalPages }
+    }
+    val lazyListState = key(bookId) {
+        rememberLazyListState(initialFirstVisibleItemIndex = currentPageIndex)
+    }
 
     var previousPageIndex by remember { mutableIntStateOf(currentPageIndex) }
     val isMovingBackwards = remember(currentPageIndex, previousPageIndex) {
@@ -264,21 +269,25 @@ fun ReaderScreen(
     }
 
     // Sync pager with ViewModel state
-    LaunchedEffect(currentPageIndex) {
-        if (!pagerState.isScrollInProgress && pagerState.currentPage != currentPageIndex && currentPageIndex < totalPages) {
-            pagerState.scrollToPage(currentPageIndex)
-        }
-        if (!lazyListState.isScrollInProgress && lazyListState.firstVisibleItemIndex != currentPageIndex && currentPageIndex < totalPages) {
-            lazyListState.scrollToItem(currentPageIndex)
+    LaunchedEffect(currentPageIndex, isBookLoading) {
+        if (!isBookLoading && book != null) {
+            if (!pagerState.isScrollInProgress && pagerState.currentPage != currentPageIndex && currentPageIndex < totalPages) {
+                pagerState.scrollToPage(currentPageIndex)
+            }
+            if (!lazyListState.isScrollInProgress && lazyListState.firstVisibleItemIndex != currentPageIndex && currentPageIndex < totalPages) {
+                lazyListState.scrollToItem(currentPageIndex)
+            }
         }
     }
 
     LaunchedEffect(pagerState.currentPage) {
-        viewModel.onPageChanged(pagerState.currentPage)
+        if (!isBookLoading && book != null && pagerState.currentPage in 0 until totalPages) {
+            viewModel.onPageChanged(pagerState.currentPage)
+        }
     }
 
     LaunchedEffect(lazyListState.firstVisibleItemIndex) {
-        if (settings.transitionStyle == TransitionStyle.VERTICAL_SCROLL && settings.readingMode != ReadingMode.SMART_REFLOW) {
+        if (!isBookLoading && book != null && settings.transitionStyle == TransitionStyle.VERTICAL_SCROLL && settings.readingMode != ReadingMode.SMART_REFLOW) {
             viewModel.onPageChanged(lazyListState.firstVisibleItemIndex)
         }
     }
@@ -319,30 +328,24 @@ fun ReaderScreen(
                 try {
                     when (direction) {
                         VolumeNavDirection.NEXT -> {
+                            val target = (currentPageIndex + 1).coerceAtMost(totalPages - 1)
+                            viewModel.onPageChanged(target)
                             if (isVertical) {
-                                val nextItem = (lazyListState.firstVisibleItemIndex + 1).coerceAtMost(totalPages - 1)
-                                lazyListState.animateScrollToItem(nextItem)
-                                volumeKeyFeedbackText = "Vol Down ➔ Page ${nextItem + 1} / $totalPages"
+                                lazyListState.animateScrollToItem(target)
                             } else {
-                                val targetPage = (pagerState.currentPage + 1).coerceAtMost(totalPages - 1)
-                                if (targetPage != pagerState.currentPage) {
-                                    pagerState.animateScrollToPage(targetPage)
-                                }
-                                volumeKeyFeedbackText = "Vol Down ➔ Page ${targetPage + 1} / $totalPages"
+                                pagerState.animateScrollToPage(target)
                             }
+                            volumeKeyFeedbackText = "Vol Down ➔ Page ${target + 1} / $totalPages"
                         }
                         VolumeNavDirection.PREVIOUS -> {
+                            val target = (currentPageIndex - 1).coerceAtLeast(0)
+                            viewModel.onPageChanged(target)
                             if (isVertical) {
-                                val prevItem = (lazyListState.firstVisibleItemIndex - 1).coerceAtLeast(0)
-                                lazyListState.animateScrollToItem(prevItem)
-                                volumeKeyFeedbackText = "Vol Up ➔ Page ${prevItem + 1} / $totalPages"
+                                lazyListState.animateScrollToItem(target)
                             } else {
-                                val targetPage = (pagerState.currentPage - 1).coerceAtLeast(0)
-                                if (targetPage != pagerState.currentPage) {
-                                    pagerState.animateScrollToPage(targetPage)
-                                }
-                                volumeKeyFeedbackText = "Vol Up ➔ Page ${targetPage + 1} / $totalPages"
+                                pagerState.animateScrollToPage(target)
                             }
+                            volumeKeyFeedbackText = "Vol Up ➔ Page ${target + 1} / $totalPages"
                         }
                     }
                 } catch (e: Throwable) {
