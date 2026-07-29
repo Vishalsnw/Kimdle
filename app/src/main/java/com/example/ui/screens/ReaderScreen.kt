@@ -252,12 +252,21 @@ fun ReaderScreen(
         }
     }
 
-    val totalPages = (book?.totalPages ?: 1).coerceAtLeast(1)
-    val pagerState = key(bookId) {
-        rememberPagerState(initialPage = currentPageIndex) { totalPages }
+    val currentBookVal = book
+    val totalPages = (currentBookVal?.totalPages ?: 1).coerceAtLeast(1)
+    val targetInitialPage = remember(bookId, isBookLoading, currentBookVal?.currentPage) {
+        if (!isBookLoading && currentBookVal != null) {
+            currentBookVal.currentPage.coerceIn(0, (totalPages - 1).coerceAtLeast(0))
+        } else {
+            currentPageIndex.coerceIn(0, (totalPages - 1).coerceAtLeast(0))
+        }
     }
-    val lazyListState = key(bookId) {
-        rememberLazyListState(initialFirstVisibleItemIndex = currentPageIndex)
+
+    val pagerState = key(bookId, isBookLoading && currentBookVal == null) {
+        rememberPagerState(initialPage = targetInitialPage) { totalPages }
+    }
+    val lazyListState = key(bookId, isBookLoading && currentBookVal == null) {
+        rememberLazyListState(initialFirstVisibleItemIndex = targetInitialPage)
     }
 
     var previousPageIndex by remember { mutableIntStateOf(currentPageIndex) }
@@ -282,13 +291,19 @@ fun ReaderScreen(
 
     LaunchedEffect(pagerState.currentPage) {
         if (!isBookLoading && book != null && pagerState.currentPage in 0 until totalPages) {
-            viewModel.onPageChanged(pagerState.currentPage)
+            if (pagerState.currentPage != currentPageIndex) {
+                viewModel.onPageChanged(pagerState.currentPage)
+            }
         }
     }
 
     LaunchedEffect(lazyListState.firstVisibleItemIndex) {
         if (!isBookLoading && book != null && settings.transitionStyle == TransitionStyle.VERTICAL_SCROLL && settings.readingMode != ReadingMode.SMART_REFLOW) {
-            viewModel.onPageChanged(lazyListState.firstVisibleItemIndex)
+            if (lazyListState.firstVisibleItemIndex in 0 until totalPages) {
+                if (lazyListState.firstVisibleItemIndex != currentPageIndex) {
+                    viewModel.onPageChanged(lazyListState.firstVisibleItemIndex)
+                }
+            }
         }
     }
 
@@ -323,6 +338,7 @@ fun ReaderScreen(
     // Volume Hardware Key Event Listener
     LaunchedEffect(Unit) {
         viewModel.volumeNavEvent.collect { direction ->
+            if (isBookLoading || book == null) return@collect
             val isVertical = (settings.transitionStyle == TransitionStyle.VERTICAL_SCROLL && settings.readingMode != ReadingMode.SMART_REFLOW)
             scope.launch {
                 try {
