@@ -15,7 +15,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
-import com.example.ui.viewmodel.VolumeNavDirection
 import kotlinx.coroutines.isActive
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.foundation.layout.Arrangement
@@ -144,8 +143,12 @@ import com.example.data.model.ReaderSettings
 import com.example.data.model.ReaderTheme
 import com.example.data.model.TransitionStyle
 import com.example.ui.theme.AmberPrimary
+import com.example.ui.theme.EInkPageBg
+import com.example.ui.theme.EInkPageText
 import com.example.ui.theme.LightPageBg
 import com.example.ui.theme.NightPageBg
+import com.example.ui.theme.OledPageBg
+import com.example.ui.theme.OledPageText
 import com.example.ui.theme.SepiaPageBg
 import com.example.ui.theme.SepiaPageText
 import com.example.ui.theme.WarmCharcoal
@@ -183,7 +186,6 @@ fun ReaderScreen(
     var bookmarkFilterColor by remember { mutableStateOf("ALL") }
     var showAudiobookBar by remember { mutableStateOf(false) }
     var showRsvpBar by remember { mutableStateOf(false) }
-    var volumeKeyFeedbackText by remember { mutableStateOf<String?>(null) }
     var currentSubPage by remember { mutableIntStateOf(0) }
     var totalSubPages by remember { mutableIntStateOf(1) }
 
@@ -213,12 +215,16 @@ fun ReaderScreen(
         ReaderTheme.LIGHT -> LightPageBg
         ReaderTheme.SEPIA -> SepiaPageBg
         ReaderTheme.NIGHT -> NightPageBg
+        ReaderTheme.OLED_BLACK -> OledPageBg
+        ReaderTheme.E_INK -> EInkPageBg
     }
 
     val currentThemeText = when (settings.theme) {
         ReaderTheme.LIGHT -> Color.Black
         ReaderTheme.SEPIA -> SepiaPageText
         ReaderTheme.NIGHT -> Color(0xFFE0D8C8)
+        ReaderTheme.OLED_BLACK -> OledPageText
+        ReaderTheme.E_INK -> EInkPageText
     }
 
     // Color matrix for PDF bitmap tinting
@@ -248,6 +254,30 @@ fun ReaderScreen(
                     )
                 )
                 ColorFilter.colorMatrix(nightMatrix)
+            }
+            ReaderTheme.OLED_BLACK -> {
+                // OLED True-Black matrix: White background becomes pure black (#000000, zero pixel emission), Black ink becomes crisp high-contrast white (#FFFFFF)
+                val oledMatrix = ColorMatrix(
+                    floatArrayOf(
+                        -1.00f, 0.00f, 0.00f, 0f, 255f,
+                        0.00f, -1.00f, 0.00f, 0f, 255f,
+                        0.00f, 0.00f, -1.00f, 0f, 255f,
+                        0.00f, 0.00f, 0.00f, 1f, 0f
+                    )
+                )
+                ColorFilter.colorMatrix(oledMatrix)
+            }
+            ReaderTheme.E_INK -> {
+                // E-Ink simulation matrix: High-contrast monochrome with paper grey tinting (#F4F3EE background, crisp jet black ink)
+                val eInkMatrix = ColorMatrix(
+                    floatArrayOf(
+                        0.30f, 0.59f, 0.11f, 0f, -10f,
+                        0.30f, 0.59f, 0.11f, 0f, -10f,
+                        0.30f, 0.59f, 0.11f, 0f, -15f,
+                        0.00f, 0.00f, 0.00f, 1f, 0f
+                    )
+                )
+                ColorFilter.colorMatrix(eInkMatrix)
             }
         }
     }
@@ -332,49 +362,6 @@ fun ReaderScreen(
                     }
                 }
             }
-        }
-    }
-
-    // Volume Hardware Key Event Listener
-    LaunchedEffect(Unit) {
-        viewModel.volumeNavEvent.collect { direction ->
-            if (isBookLoading || book == null) return@collect
-            val isVertical = (settings.transitionStyle == TransitionStyle.VERTICAL_SCROLL && settings.readingMode != ReadingMode.SMART_REFLOW)
-            scope.launch {
-                try {
-                    when (direction) {
-                        VolumeNavDirection.NEXT -> {
-                            val target = (currentPageIndex + 1).coerceAtMost(totalPages - 1)
-                            viewModel.onPageChanged(target)
-                            if (isVertical) {
-                                lazyListState.animateScrollToItem(target)
-                            } else {
-                                pagerState.animateScrollToPage(target)
-                            }
-                            volumeKeyFeedbackText = "Vol Down ➔ Page ${target + 1} / $totalPages"
-                        }
-                        VolumeNavDirection.PREVIOUS -> {
-                            val target = (currentPageIndex - 1).coerceAtLeast(0)
-                            viewModel.onPageChanged(target)
-                            if (isVertical) {
-                                lazyListState.animateScrollToItem(target)
-                            } else {
-                                pagerState.animateScrollToPage(target)
-                            }
-                            volumeKeyFeedbackText = "Vol Up ➔ Page ${target + 1} / $totalPages"
-                        }
-                    }
-                } catch (e: Throwable) {
-                    // Ignore animation cancellation so hardware button flow never breaks
-                }
-            }
-        }
-    }
-
-    LaunchedEffect(volumeKeyFeedbackText) {
-        if (volumeKeyFeedbackText != null) {
-            kotlinx.coroutines.delay(1600)
-            volumeKeyFeedbackText = null
         }
     }
 
@@ -651,40 +638,6 @@ fun ReaderScreen(
                 }
             }
 
-            // Volume Key Feedback Overlay Toast
-            AnimatedVisibility(
-                visible = volumeKeyFeedbackText != null,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 64.dp)
-            ) {
-                Surface(
-                    color = AmberPrimary,
-                    contentColor = Color.White,
-                    shape = RoundedCornerShape(20.dp),
-                    shadowElevation = 8.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.VolumeUp,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = volumeKeyFeedbackText ?: "",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
-                        )
-                    }
-                }
-            }
-
             // Bottom Overlays Container (Audiobook Player, Auto-Scroll & Navigation Overlay)
             Column(
                 modifier = Modifier
@@ -810,34 +763,6 @@ fun ReaderScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                 )
-                            }
-
-                            if (settings.volumeKeyNavigation) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Surface(
-                                    color = AmberPrimary.copy(alpha = 0.1f),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.VolumeUp,
-                                            contentDescription = null,
-                                            tint = AmberPrimary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "Hardware Volume Keys Active (Vol Down = Next, Vol Up = Prev)",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
                             }
                         }
                     }
@@ -1518,37 +1443,65 @@ fun ReaderScreen(
                 // Theme Section
                 Text(text = "Color Theme", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
-                Row(
+                LazyRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    ThemeOptionCard(
-                        title = "Light",
-                        icon = Icons.Default.LightMode,
-                        bg = LightPageBg,
-                        textColor = Color.Black,
-                        selected = settings.theme == ReaderTheme.LIGHT,
-                        onClick = { viewModel.updateTheme(ReaderTheme.LIGHT) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ThemeOptionCard(
-                        title = "Sepia",
-                        icon = Icons.Default.MenuBook,
-                        bg = SepiaPageBg,
-                        textColor = SepiaPageText,
-                        selected = settings.theme == ReaderTheme.SEPIA,
-                        onClick = { viewModel.updateTheme(ReaderTheme.SEPIA) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ThemeOptionCard(
-                        title = "Night",
-                        icon = Icons.Default.DarkMode,
-                        bg = NightPageBg,
-                        textColor = Color(0xFFE0D8C8),
-                        selected = settings.theme == ReaderTheme.NIGHT,
-                        onClick = { viewModel.updateTheme(ReaderTheme.NIGHT) },
-                        modifier = Modifier.weight(1f)
-                    )
+                    item {
+                        ThemeOptionCard(
+                            title = "Light",
+                            icon = Icons.Default.LightMode,
+                            bg = LightPageBg,
+                            textColor = Color.Black,
+                            selected = settings.theme == ReaderTheme.LIGHT,
+                            onClick = { viewModel.updateTheme(ReaderTheme.LIGHT) },
+                            modifier = Modifier.width(96.dp)
+                        )
+                    }
+                    item {
+                        ThemeOptionCard(
+                            title = "Sepia",
+                            icon = Icons.Default.MenuBook,
+                            bg = SepiaPageBg,
+                            textColor = SepiaPageText,
+                            selected = settings.theme == ReaderTheme.SEPIA,
+                            onClick = { viewModel.updateTheme(ReaderTheme.SEPIA) },
+                            modifier = Modifier.width(96.dp)
+                        )
+                    }
+                    item {
+                        ThemeOptionCard(
+                            title = "Night",
+                            icon = Icons.Default.DarkMode,
+                            bg = NightPageBg,
+                            textColor = Color(0xFFE0D8C8),
+                            selected = settings.theme == ReaderTheme.NIGHT,
+                            onClick = { viewModel.updateTheme(ReaderTheme.NIGHT) },
+                            modifier = Modifier.width(96.dp)
+                        )
+                    }
+                    item {
+                        ThemeOptionCard(
+                            title = "OLED Black",
+                            icon = Icons.Default.DarkMode,
+                            bg = OledPageBg,
+                            textColor = OledPageText,
+                            selected = settings.theme == ReaderTheme.OLED_BLACK,
+                            onClick = { viewModel.updateTheme(ReaderTheme.OLED_BLACK) },
+                            modifier = Modifier.width(104.dp)
+                        )
+                    }
+                    item {
+                        ThemeOptionCard(
+                            title = "E-Ink Paper",
+                            icon = Icons.Default.Description,
+                            bg = EInkPageBg,
+                            textColor = EInkPageText,
+                            selected = settings.theme == ReaderTheme.E_INK,
+                            onClick = { viewModel.updateTheme(ReaderTheme.E_INK) },
+                            modifier = Modifier.width(104.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -1603,8 +1556,8 @@ fun ReaderScreen(
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Hands-Free & Hardware Controls Section
-                Text(text = "Hands-Free & Hardware Navigation", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                // Hands-Free Auto-Scroll Section
+                Text(text = "Auto-Scroll Reading Speed", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Row(
@@ -1613,25 +1566,7 @@ fun ReaderScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Volume Buttons Page Turn", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                        Text(text = "Press Vol Down = Next Page, Vol Up = Prev Page", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                    }
-                    Switch(
-                        checked = settings.volumeKeyNavigation,
-                        onCheckedChange = { viewModel.updateVolumeKeyNavigation(it) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = AmberPrimary, checkedTrackColor = AmberPrimary.copy(alpha = 0.3f))
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Auto-Scroll Speed", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text(text = "Pacing Rate", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         Text(text = "Level $autoScrollSpeed (1 = Slowest, 10 = Fastest)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                     }
                 }
@@ -1838,6 +1773,8 @@ fun ReflowPageItem(
             com.example.data.model.ReaderTheme.LIGHT -> Color.Black
             com.example.data.model.ReaderTheme.SEPIA -> SepiaPageText
             com.example.data.model.ReaderTheme.NIGHT -> Color(0xFFE0D8C8)
+            com.example.data.model.ReaderTheme.OLED_BLACK -> OledPageText
+            com.example.data.model.ReaderTheme.E_INK -> EInkPageText
         }
         val configuration = LocalConfiguration.current
         val screenWidthDp = configuration.screenWidthDp

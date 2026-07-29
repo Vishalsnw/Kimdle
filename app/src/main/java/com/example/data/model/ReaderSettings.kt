@@ -3,7 +3,9 @@ package com.example.data.model
 enum class ReaderTheme {
     LIGHT,
     SEPIA,
-    NIGHT
+    NIGHT,
+    OLED_BLACK,
+    E_INK
 }
 
 enum class TransitionStyle {
@@ -26,6 +28,5 @@ data class ReaderSettings(
     val bionicReading: Boolean = false,
     val fontSize: Int = 18,
     val lineHeight: Float = 1.5f,
-    val volumeKeyNavigation: Boolean = true,
     val autoScrollSpeed: Int = 5
 )

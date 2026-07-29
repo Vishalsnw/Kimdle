@@ -27,8 +27,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-enum class VolumeNavDirection { NEXT, PREVIOUS }
-
 class ReaderViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: BookRepository
     private var pdfRendererHelper: PdfRendererHelper? = null
@@ -105,9 +103,6 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _rsvpWords = MutableStateFlow<List<String>>(emptyList())
     val rsvpWords: StateFlow<List<String>> = _rsvpWords
-
-    private val _volumeNavEvent = MutableSharedFlow<VolumeNavDirection>(extraBufferCapacity = 5)
-    val volumeNavEvent: SharedFlow<VolumeNavDirection> = _volumeNavEvent
 
     private val _isAutoScrollActive = MutableStateFlow(false)
     val isAutoScrollActive: StateFlow<Boolean> = _isAutoScrollActive
@@ -253,33 +248,6 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     fun updateFontSize(size: Int) {
         _settings.value = _settings.value.copy(fontSize = size.coerceIn(12, 38))
     }
-
-    fun updateVolumeKeyNavigation(enabled: Boolean) {
-        _settings.value = _settings.value.copy(volumeKeyNavigation = enabled)
-    }
-
-    fun isVolumeKeyNavEnabled(): Boolean {
-        return _settings.value.volumeKeyNavigation
-    }
-
-    fun onVolumeDownPressed(): Boolean {
-        if (_settings.value.volumeKeyNavigation) {
-            _volumeNavEvent.tryEmit(VolumeNavDirection.NEXT)
-            return true
-        }
-        return false
-    }
-
-    fun onVolumeUpPressed(): Boolean {
-        if (_settings.value.volumeKeyNavigation) {
-            _volumeNavEvent.tryEmit(VolumeNavDirection.PREVIOUS)
-            return true
-        }
-        return false
-    }
-
-    fun onVolumeKeyDown(): Boolean = onVolumeDownPressed()
-    fun onVolumeKeyUp(): Boolean = onVolumeUpPressed()
 
     fun startAutoScroll() {
         stopTts()

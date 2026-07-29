@@ -42,28 +42,6 @@ class MainActivity : ComponentActivity() {
       }
     }
   }
-
-  override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-    if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-      if (readerViewModel.onVolumeDownPressed()) {
-        return true
-      }
-    } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-      if (readerViewModel.onVolumeUpPressed()) {
-        return true
-      }
-    }
-    return super.onKeyDown(keyCode, event)
-  }
-
-  override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-    if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-      if (readerViewModel.isVolumeKeyNavEnabled()) {
-        return true
-      }
-    }
-    return super.onKeyUp(keyCode, event)
-  }
 }
 
 @Composable
