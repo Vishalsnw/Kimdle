@@ -256,7 +256,11 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         _settings.value = _settings.value.copy(volumeKeyNavigation = enabled)
     }
 
-    fun onVolumeKeyDown(): Boolean {
+    fun isVolumeKeyNavEnabled(): Boolean {
+        return _settings.value.volumeKeyNavigation
+    }
+
+    fun onVolumeDownPressed(): Boolean {
         if (_settings.value.volumeKeyNavigation) {
             _volumeNavEvent.tryEmit(VolumeNavDirection.NEXT)
             return true
@@ -264,13 +268,16 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         return false
     }
 
-    fun onVolumeKeyUp(): Boolean {
+    fun onVolumeUpPressed(): Boolean {
         if (_settings.value.volumeKeyNavigation) {
             _volumeNavEvent.tryEmit(VolumeNavDirection.PREVIOUS)
             return true
         }
         return false
     }
+
+    fun onVolumeKeyDown(): Boolean = onVolumeDownPressed()
+    fun onVolumeKeyUp(): Boolean = onVolumeUpPressed()
 
     fun startAutoScroll() {
         stopTts()

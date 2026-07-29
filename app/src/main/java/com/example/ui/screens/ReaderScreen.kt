@@ -265,7 +265,7 @@ fun ReaderScreen(
 
     // Sync pager with ViewModel state
     LaunchedEffect(currentPageIndex) {
-        if (pagerState.currentPage != currentPageIndex && currentPageIndex < totalPages) {
+        if (!pagerState.isScrollInProgress && pagerState.currentPage != currentPageIndex && currentPageIndex < totalPages) {
             pagerState.scrollToPage(currentPageIndex)
         }
         if (!lazyListState.isScrollInProgress && lazyListState.firstVisibleItemIndex != currentPageIndex && currentPageIndex < totalPages) {
@@ -297,7 +297,11 @@ fun ReaderScreen(
                     val delayMs = ((11 - autoScrollSpeed) * 1000L).coerceAtLeast(1200L)
                     kotlinx.coroutines.delay(delayMs)
                     if (isAutoScrollActive && pagerState.currentPage < totalPages - 1) {
-                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                        try {
+                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                        } catch (e: Throwable) {
+                            // ignore animation cancellation
+                        }
                     } else if (pagerState.currentPage >= totalPages - 1) {
                         viewModel.stopAutoScroll()
                         break
@@ -311,28 +315,38 @@ fun ReaderScreen(
     LaunchedEffect(Unit) {
         viewModel.volumeNavEvent.collect { direction ->
             val isVertical = (settings.transitionStyle == TransitionStyle.VERTICAL_SCROLL && settings.readingMode != ReadingMode.SMART_REFLOW)
-            when (direction) {
-                VolumeNavDirection.NEXT -> {
-                    if (isVertical) {
-                        val nextItem = (lazyListState.firstVisibleItemIndex + 1).coerceAtMost(totalPages - 1)
-                        lazyListState.animateScrollToItem(nextItem)
-                    } else {
-                        if (pagerState.currentPage < totalPages - 1) {
-                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+            scope.launch {
+                try {
+                    when (direction) {
+                        VolumeNavDirection.NEXT -> {
+                            if (isVertical) {
+                                val nextItem = (lazyListState.firstVisibleItemIndex + 1).coerceAtMost(totalPages - 1)
+                                lazyListState.animateScrollToItem(nextItem)
+                                volumeKeyFeedbackText = "Vol Down ➔ Page ${nextItem + 1} / $totalPages"
+                            } else {
+                                val targetPage = (pagerState.currentPage + 1).coerceAtMost(totalPages - 1)
+                                if (targetPage != pagerState.currentPage) {
+                                    pagerState.animateScrollToPage(targetPage)
+                                }
+                                volumeKeyFeedbackText = "Vol Down ➔ Page ${targetPage + 1} / $totalPages"
+                            }
+                        }
+                        VolumeNavDirection.PREVIOUS -> {
+                            if (isVertical) {
+                                val prevItem = (lazyListState.firstVisibleItemIndex - 1).coerceAtLeast(0)
+                                lazyListState.animateScrollToItem(prevItem)
+                                volumeKeyFeedbackText = "Vol Up ➔ Page ${prevItem + 1} / $totalPages"
+                            } else {
+                                val targetPage = (pagerState.currentPage - 1).coerceAtLeast(0)
+                                if (targetPage != pagerState.currentPage) {
+                                    pagerState.animateScrollToPage(targetPage)
+                                }
+                                volumeKeyFeedbackText = "Vol Up ➔ Page ${targetPage + 1} / $totalPages"
+                            }
                         }
                     }
-                    volumeKeyFeedbackText = "Vol Down ➔ Page ${currentPageIndex + 2} / $totalPages"
-                }
-                VolumeNavDirection.PREVIOUS -> {
-                    if (isVertical) {
-                        val prevItem = (lazyListState.firstVisibleItemIndex - 1).coerceAtLeast(0)
-                        lazyListState.animateScrollToItem(prevItem)
-                    } else {
-                        if (pagerState.currentPage > 0) {
-                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                        }
-                    }
-                    volumeKeyFeedbackText = "Vol Up ➔ Page ${currentPageIndex} / $totalPages"
+                } catch (e: Throwable) {
+                    // Ignore animation cancellation so hardware button flow never breaks
                 }
             }
         }
