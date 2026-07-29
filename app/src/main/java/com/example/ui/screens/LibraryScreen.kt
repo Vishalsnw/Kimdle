@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -85,10 +86,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.model.Book
-import com.example.ui.theme.AmberPrimary
-import com.example.ui.theme.ProgressGreen
-import com.example.ui.theme.SepiaCardBg
-import com.example.ui.theme.WarmCharcoal
+import com.example.ui.theme.*
 import com.example.ui.viewmodel.LibraryFilter
 import com.example.ui.viewmodel.LibraryViewModel
 import java.io.File
@@ -192,11 +190,12 @@ fun LibraryScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
-                containerColor = AmberPrimary,
-                contentColor = Color.White,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 icon = { Icon(Icons.Default.FolderOpen, contentDescription = "Import PDF") },
-                text = { Text("Import PDF", fontWeight = FontWeight.Bold) },
-                modifier = Modifier.shadow(8.dp, RoundedCornerShape(16.dp))
+                text = { Text("Import PDF", fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp) },
+                modifier = Modifier
+                    .shadow(12.dp, RoundedCornerShape(20.dp), spotColor = GoldPrimary)
             )
         }
     ) { innerPadding ->
@@ -207,20 +206,30 @@ fun LibraryScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Habit Tracker Compact Banner
+                // Habit Tracker Glossy Banner
                 val streakDays = remember(dailyStats) { computeStreak(dailyStats) }
                 Surface(
-                    color = AmberPrimary.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(18.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        Brush.horizontalGradient(
+                            listOf(
+                                GoldPrimary.copy(alpha = 0.4f),
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                            )
+                        )
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
                         .clickable { showStatsSheet = true }
+                        .shadow(4.dp, RoundedCornerShape(18.dp), spotColor = GoldPrimary.copy(alpha = 0.2f))
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -228,36 +237,50 @@ fun LibraryScreen(
                             Box(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(AmberPrimary.copy(alpha = 0.2f))
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                Color(0xFFFF6B00).copy(alpha = 0.35f),
+                                                Color(0xFFFF8F00).copy(alpha = 0.1f)
+                                            )
+                                        )
+                                    )
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.LocalFireDepartment,
                                     contentDescription = null,
-                                    tint = if (streakDays > 0) Color(0xFFFF5722) else AmberPrimary,
-                                    modifier = Modifier.size(20.dp)
+                                    tint = if (streakDays > 0) Color(0xFFFF5722) else GoldPrimary,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = if (streakDays > 0) "$streakDays Day Reading Streak!" else "Start Your Reading Streak",
+                                    text = if (streakDays > 0) "$streakDays Day Reading Streak! 🔥" else "Start Your Daily Reading Streak",
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                                 )
                                 Text(
-                                    text = "Tap to view daily stats, goals & badges",
+                                    text = "Tap for stats, goals, habits & badges",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
-                        Icon(
-                            imageVector = Icons.Default.Assessment,
-                            contentDescription = "Open Stats",
-                            tint = AmberPrimary,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(GoldPrimary.copy(alpha = 0.15f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Assessment,
+                                contentDescription = "Open Stats",
+                                tint = GoldPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
 
@@ -265,8 +288,8 @@ fun LibraryScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { viewModel.onSearchQueryChanged(it) },
-                    placeholder = { Text("Search your book library...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = AmberPrimary) },
+                    placeholder = { Text("Search your shelf or titles...", style = MaterialTheme.typography.bodyMedium) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = GoldPrimary) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
@@ -275,14 +298,17 @@ fun LibraryScreen(
                         }
                     },
                     singleLine = true,
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(28.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AmberPrimary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f)
+                        focusedBorderColor = GoldPrimary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .shadow(2.dp, RoundedCornerShape(28.dp))
                 )
 
                 // Filter Chips
@@ -454,10 +480,25 @@ fun FilterChipItem(
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(text, fontSize = 13.sp) },
+        label = {
+            Text(
+                text,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+            )
+        },
+        shape = RoundedCornerShape(20.dp),
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = AmberPrimary.copy(alpha = 0.15f),
-            selectedLabelColor = AmberPrimary
+            selectedContainerColor = GoldPrimary,
+            selectedLabelColor = Color.Black,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            labelColor = MaterialTheme.colorScheme.onSurface
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = selected,
+            borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+            selectedBorderColor = GoldPrimary
         )
     )
 }
@@ -467,26 +508,35 @@ fun ContinueReadingBanner(
     book: Book,
     onClick: () -> Unit
 ) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SepiaCardBg),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            Brush.horizontalGradient(
+                listOf(
+                    GoldPrimary.copy(alpha = 0.5f),
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+            )
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .shadow(8.dp, RoundedCornerShape(20.dp), spotColor = GoldPrimary.copy(alpha = 0.2f))
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Mini Cover
+            // Mini Glossy Cover
             Box(
                 modifier = Modifier
-                    .width(70.dp)
+                    .width(72.dp)
                     .aspectRatio(0.7f)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Color.White)
-                    .shadow(4.dp)
+                    .shadow(6.dp, RoundedCornerShape(10.dp))
             ) {
                 if (!book.coverImagePath.isNullOrEmpty() && File(book.coverImagePath).exists()) {
                     AsyncImage(
@@ -496,15 +546,35 @@ fun ContinueReadingBanner(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Default.MenuBook,
-                        contentDescription = null,
-                        tint = AmberPrimary,
+                    Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .align(Alignment.Center)
-                    )
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(SepiaCardBg, SepiaPageBg)
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MenuBook,
+                            contentDescription = null,
+                            tint = GoldPrimary,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
                 }
+                // Spine overlay shadow
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(4.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color.Black.copy(alpha = 0.3f), Color.Transparent)
+                            )
+                        )
+                )
             }
 
             Spacer(modifier = Modifier.width(16.dp))
@@ -513,14 +583,20 @@ fun ContinueReadingBanner(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .background(AmberPrimary, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(GoldPrimary, GoldSecondary)
+                                )
+                            )
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = "CONTINUE READING",
-                            color = Color.White,
+                            text = "RESUME READING",
+                            color = Color.Black,
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.5.sp
                         )
                     }
                 }
@@ -529,14 +605,16 @@ fun ContinueReadingBanner(
                     text = book.title,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        color = WarmCharcoal
+                        color = MaterialTheme.colorScheme.onSurface
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Page ${book.currentPage + 1} of ${book.totalPages}",
-                    style = MaterialTheme.typography.bodySmall.copy(color = WarmCharcoal.copy(alpha = 0.7f))
+                    text = "Page ${book.currentPage + 1} of ${book.totalPages} (${book.progressPercentage}%)",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 LinearProgressIndicator(
@@ -546,7 +624,7 @@ fun ContinueReadingBanner(
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
                     color = ProgressGreen,
-                    trackColor = Color.Black.copy(alpha = 0.1f)
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             }
         }
@@ -558,8 +636,8 @@ fun HeroWelcomeBanner(
     onImportClick: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Box(
@@ -578,14 +656,14 @@ fun HeroWelcomeBanner(
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f))
                         )
                     )
             )
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(16.dp)
+                    .padding(18.dp)
             ) {
                 Text(
                     text = "Your Cozy Digital Shelf",
@@ -595,7 +673,7 @@ fun HeroWelcomeBanner(
                     )
                 )
                 Text(
-                    text = "Experience PDFs with realistic page turning & eye-soothing sepia/night themes.",
+                    text = "Experience PDFs with realistic page turning & eye-soothing themes.",
                     style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.9f))
                 )
             }
@@ -615,14 +693,14 @@ fun BookCoverCard(
             .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {
-        // Book Cover
+        // Glossy Book Cover
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.7f)
-                .shadow(6.dp, RoundedCornerShape(8.dp))
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color.White)
+                .shadow(8.dp, RoundedCornerShape(12.dp), spotColor = GoldPrimary.copy(alpha = 0.15f))
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surface)
         ) {
             if (!book.coverImagePath.isNullOrEmpty() && File(book.coverImagePath).exists()) {
                 AsyncImage(
@@ -635,20 +713,24 @@ fun BookCoverCard(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(SepiaCardBg),
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(SepiaCardBg, SepiaPageBg)
+                            )
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             imageVector = Icons.Default.AutoStories,
                             contentDescription = null,
-                            tint = AmberPrimary,
-                            modifier = Modifier.size(48.dp)
+                            tint = GoldPrimary,
+                            modifier = Modifier.size(44.dp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = "PDF",
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = WarmCharcoal,
                             fontSize = 18.sp
                         )
@@ -656,19 +738,50 @@ fun BookCoverCard(
                 }
             }
 
+            // Book spine overlay depth effect
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(6.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent)
+                        )
+                    )
+            )
+
+            // Glossy Specular Light Reflection Overlay across top right
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.18f),
+                                Color.Transparent,
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
             // Bookmark Ribbon if bookmarked
             if (book.isBookmarked) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
-                        .background(AmberPrimary, CircleShape)
-                        .padding(4.dp)
+                        .background(
+                            Brush.verticalGradient(listOf(GoldPrimary, GoldSecondary)),
+                            CircleShape
+                        )
+                        .padding(5.dp)
+                        .shadow(4.dp, CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Bookmark,
                         contentDescription = "Bookmarked",
-                        tint = Color.White,
+                        tint = Color.Black,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -678,14 +791,14 @@ fun BookCoverCard(
             Row(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 IconButton(
                     onClick = onDeleteClick,
                     modifier = Modifier
-                        .size(28.dp)
-                        .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                        .size(30.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
@@ -699,13 +812,13 @@ fun BookCoverCard(
                     IconButton(
                         onClick = onExportNotesClick,
                         modifier = Modifier
-                            .size(28.dp)
-                            .background(AmberPrimary, CircleShape)
+                            .size(30.dp)
+                            .background(GoldPrimary, CircleShape)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Description,
                             contentDescription = "Export Notes (.md)",
-                            tint = Color.White,
+                            tint = Color.Black,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -718,35 +831,42 @@ fun BookCoverCard(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .background(Color.Black.copy(alpha = 0.75f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text(
-                        text = "${book.progressPercentage}% Read",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "${book.progressPercentage}% Read",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Title and Subtitle
         Text(
             text = book.title,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.Bold
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
             ),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = if (book.isSample) "Built-in Sample • ${book.formattedSize}" else "${book.author} • ${book.formattedSize}",
+            text = if (book.isSample) "Sample Guide • ${book.formattedSize}" else "${book.author} • ${book.formattedSize}",
             style = MaterialTheme.typography.bodySmall.copy(
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             ),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

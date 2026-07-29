@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "PDF Book Reader"
+rootProject.name = "Paper Leaf - PDF Reader"
 
 include(":app")

@@ -13,26 +13,32 @@ import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme =
   darkColorScheme(
-    primary = AmberPrimary,
+    primary = GoldPrimary,
     secondary = AccentOrange,
     tertiary = ProgressGreen,
-    background = NightPageBg,
-    surface = NightCardBg,
-    onPrimary = Color.White,
-    onBackground = NightPageText,
-    onSurface = NightPageText,
+    background = ObsidianDarkBg,
+    surface = ObsidianSurface,
+    surfaceVariant = ObsidianSurfaceVariant,
+    outline = ObsidianBorder,
+    onPrimary = Color.Black,
+    onBackground = Color(0xFFF1F5F9),
+    onSurface = Color(0xFFF1F5F9),
+    onSurfaceVariant = Color(0xFF94A3B8)
   )
 
 private val LightColorScheme =
   lightColorScheme(
-    primary = AmberPrimary,
-    secondary = AmberSecondary,
+    primary = GoldSecondary,
+    secondary = AccentOrange,
     tertiary = ProgressGreen,
     background = LightPageBg,
-    surface = Color.White,
+    surface = LightSurface,
+    surfaceVariant = LightSurfaceVariant,
+    outline = Color(0xFFCBD5E1),
     onPrimary = Color.White,
     onBackground = LightPageText,
     onSurface = LightPageText,
+    onSurfaceVariant = Color(0xFF64748B)
   )
 
 @Composable

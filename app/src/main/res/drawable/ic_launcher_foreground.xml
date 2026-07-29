@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/app_icon_pdf_book"
+        android:drawable="@drawable/paper_leaf_icon_1785363905861"
         android:gravity="center" />
 </layer-list>

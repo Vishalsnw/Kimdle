@@ -142,7 +142,7 @@ import com.example.data.model.Bookmark
 import com.example.data.model.ReaderSettings
 import com.example.data.model.ReaderTheme
 import com.example.data.model.TransitionStyle
-import com.example.ui.theme.AmberPrimary
+import com.example.ui.theme.*
 import com.example.ui.theme.EInkPageBg
 import com.example.ui.theme.EInkPageText
 import com.example.ui.theme.LightPageBg
@@ -1986,12 +1986,12 @@ fun ThemeOptionCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = bg),
-        border = if (selected) androidx.compose.foundation.BorderStroke(2.dp, AmberPrimary) else androidx.compose.foundation.BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 6.dp else 1.dp),
+        border = if (selected) androidx.compose.foundation.BorderStroke(2.5.dp, GoldPrimary) else androidx.compose.foundation.BorderStroke(1.dp, Color.Gray.copy(alpha = 0.25f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 8.dp else 2.dp),
         modifier = modifier
-            .height(85.dp)
+            .height(90.dp)
             .clickable(onClick = onClick)
     ) {
         Column(
@@ -2017,19 +2017,19 @@ fun TransitionStyleCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) AmberPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (selected) GoldPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
         ),
-        border = if (selected) androidx.compose.foundation.BorderStroke(2.dp, AmberPrimary) else null,
+        border = if (selected) androidx.compose.foundation.BorderStroke(2.dp, GoldPrimary) else null,
         modifier = modifier
-            .height(75.dp)
+            .height(80.dp)
             .clickable(onClick = onClick)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(14.dp),
             verticalArrangement = Arrangement.Center
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2037,11 +2037,11 @@ fun TransitionStyleCard(
                     text = title,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = if (selected) AmberPrimary else MaterialTheme.colorScheme.onSurface
+                    color = if (selected) GoldPrimary else MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 if (selected) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = AmberPrimary, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Check, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(18.dp))
                 }
             }
             Spacer(modifier = Modifier.height(2.dp))
