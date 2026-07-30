@@ -29,9 +29,9 @@ android {
       val releaseKeystore = file(keystorePath)
       if (releaseKeystore.exists()) {
         storeFile = releaseKeystore
-        storePassword = System.getenv("STORE_PASSWORD") ?: "android"
-        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
-        keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+        storePassword = System.getenv("STORE_PASSWORD").takeIf { !it.isNullOrBlank() } ?: "android"
+        keyAlias = System.getenv("KEY_ALIAS").takeIf { !it.isNullOrBlank() } ?: "upload"
+        keyPassword = System.getenv("KEY_PASSWORD").takeIf { !it.isNullOrBlank() } ?: "android"
       } else {
         storeFile = file("${rootDir}/debug.keystore")
         storePassword = "android"

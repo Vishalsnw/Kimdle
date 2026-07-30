@@ -42,6 +42,9 @@ jobs:
           if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
             echo "Restoring release keystore from secrets..."
             echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+          else
+            echo "Generating production release upload keystore for Google Play..."
+            keytool -genkey -v -keystore my-upload-key.jks -storepass "${{ secrets.STORE_PASSWORD || 'android' }}" -alias "${{ secrets.KEY_ALIAS || 'upload' }}" -keypass "${{ secrets.KEY_PASSWORD || 'android' }}" -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Paper Leaf Publisher, O=Paper Leaf, C=US"
           fi
 
       - name: Run Unit & Robolectric Tests
