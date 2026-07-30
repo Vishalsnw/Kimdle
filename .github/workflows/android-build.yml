@@ -9,10 +9,10 @@ on:
 
 jobs:
   build:
-    name: Build & Test Android App
+    name: Build & Test Android App (APK & AAB)
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required for publishing APK to GitHub Releases
+      contents: write  # Required for publishing APK & AAB to GitHub Releases
 
     steps:
       - name: Checkout Repository
@@ -29,7 +29,7 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Restore or Generate Debug Keystore
+      - name: Restore or Generate Keystores
         run: |
           if [ -f debug.keystore.base64 ]; then
             echo "Restoring debug.keystore from base64..."
@@ -39,6 +39,10 @@ jobs:
             echo "Generating new debug.keystore..."
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "Restoring release keystore from secrets..."
+            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+          fi
 
       - name: Run Unit & Robolectric Tests
         run: gradle testDebugUnitTest --no-daemon
@@ -46,29 +50,48 @@ jobs:
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon
 
+      - name: Build Release App Bundle (AAB for Google Play)
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle bundleRelease --no-daemon
+
+      - name: Upload Release AAB Artifact (Google Play)
+        uses: actions/upload-artifact@v4
+        if: success()
+        continue-on-error: true
+        with:
+          name: paper-leaf-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          retention-days: 14
+          overwrite: true
+
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         if: success()
         continue-on-error: true
         with:
-          name: pdf-reader-debug-apk
+          name: paper-leaf-debug-apk
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 3
+          retention-days: 7
           overwrite: true
 
-      - name: Publish APK to GitHub Releases (Bypass Quota)
+      - name: Publish APK & AAB to GitHub Releases
         if: success() && github.event_name != 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Preparing APK for GitHub Release..."
-          cp app/build/outputs/apk/debug/*.apk PDF-Reader-Latest.apk
+          echo "Preparing APK and AAB for GitHub Release..."
+          cp app/build/outputs/apk/debug/*.apk Paper-Leaf-Latest.apk
+          cp app/build/outputs/bundle/release/*.aab Paper-Leaf-Release.aab
           
           echo "Deleting previous automated release tag if existing..."
           gh release delete latest-build --cleanup-tag --yes || true
           
-          echo "Creating new GitHub Release with APK asset..."
-          gh release create latest-build PDF-Reader-Latest.apk \
-            --title "📱 Latest PDF Reader Build (APK)" \
-            --notes "Automated build from branch \`${{ github.ref_name }}\` (Commit: \`${{ github.sha }}\`).<br><br>📥 **How to install:** Click \`PDF-Reader-Latest.apk\` below to download and install on your Android device." \
+          echo "Creating new GitHub Release with AAB and APK assets..."
+          gh release create latest-build Paper-Leaf-Release.aab Paper-Leaf-Latest.apk \
+            --title "🚀 Paper Leaf - Google Play AAB & APK Build" \
+            --notes "Automated build from branch \`${{ github.ref_name }}\` (Commit: \`${{ github.sha }}\`).<br><br>📦 **Google Play Store:** Download \`Paper-Leaf-Release.aab\` to upload directly to Google Play Console.<br>📱 **Direct Test Install:** Download \`Paper-Leaf-Latest.apk\` to test on your device." \
             --latest
+
