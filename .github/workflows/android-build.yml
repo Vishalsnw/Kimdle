@@ -29,22 +29,22 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Restore or Generate Keystores
+      - name: Restore Keystores
         run: |
           if [ -f debug.keystore.base64 ]; then
             echo "Restoring debug.keystore from base64..."
             base64 -d debug.keystore.base64 > debug.keystore
-          fi
-          if [ ! -f debug.keystore ]; then
-            echo "Generating new debug.keystore..."
+          elif [ ! -f debug.keystore ]; then
+            echo "Generating debug.keystore..."
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
-          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
-            echo "Restoring release keystore from secrets..."
-            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+          
+          if [ -f release.keystore.base64 ]; then
+            echo "Restoring release keystore from release.keystore.base64..."
+            base64 -d release.keystore.base64 > my-upload-key.jks
           else
-            echo "Generating production release upload keystore for Google Play..."
-            keytool -genkey -v -keystore my-upload-key.jks -storepass "${{ secrets.STORE_PASSWORD || 'android' }}" -alias "${{ secrets.KEY_ALIAS || 'upload' }}" -keypass "${{ secrets.KEY_PASSWORD || 'android' }}" -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Paper Leaf Publisher, O=Paper Leaf, C=US"
+            echo "Restoring release keystore from embedded base64..."
+            echo "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" | base64 -d > my-upload-key.jks
           fi
 
       - name: Run Unit & Robolectric Tests
@@ -55,9 +55,9 @@ jobs:
 
       - name: Build Release App Bundle (AAB for Google Play)
         env:
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: "android"
+          KEY_ALIAS: "upload"
+          KEY_PASSWORD: "android"
         run: gradle bundleRelease --no-daemon
 
       - name: Upload Release AAB Artifact (Google Play)
