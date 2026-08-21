@@ -1,5 +1,6 @@
 package com.example
 
+import android.app.Activity
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -21,6 +23,7 @@ import com.example.ui.screens.ReaderScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.LibraryViewModel
 import com.example.ui.viewmodel.ReaderViewModel
+import com.example.util.AdManager
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
 class MainActivity : ComponentActivity() {
@@ -33,6 +36,10 @@ class MainActivity : ComponentActivity() {
     } catch (e: Exception) {
       e.printStackTrace()
     }
+
+    // Initialize Google AdMob Mobile Ads SDK
+    AdManager.initialize(applicationContext)
+
     enableEdgeToEdge()
     setContent {
       MyApplicationTheme {
@@ -42,10 +49,18 @@ class MainActivity : ComponentActivity() {
       }
     }
   }
+
+  override fun onResume() {
+    super.onResume()
+    // Trigger App Open Ad if available
+    AdManager.showAppOpenAdIfAvailable(this)
+  }
 }
 
 @Composable
 fun ReaderAppNavigation(readerViewModel: ReaderViewModel = viewModel()) {
+  val context = LocalContext.current
+  val activity = context as? Activity
   val navController = rememberNavController()
   val libraryViewModel: LibraryViewModel = viewModel()
 
@@ -54,7 +69,13 @@ fun ReaderAppNavigation(readerViewModel: ReaderViewModel = viewModel()) {
       LibraryScreen(
         viewModel = libraryViewModel,
         onBookClick = { bookId ->
-          navController.navigate("reader/$bookId")
+          if (activity != null) {
+            AdManager.showInterstitialAd(activity) {
+              navController.navigate("reader/$bookId")
+            }
+          } else {
+            navController.navigate("reader/$bookId")
+          }
         }
       )
     }
